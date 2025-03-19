@@ -1,0 +1,41 @@
+# pyproject.toml
+
+[build-system]
+requires = ["setuptools>=65.5.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = [ "btu_py" ]
+
+[project]
+name = "btu_py"
+version = "0.0.1"
+description = "An alternative BTU scheduler written in Python."
+readme = "README.md"
+authors = [
+	{ name = "Brian Pond", email = "brian@datahenge.com" },
+]
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+    "click ~= 8.1.7",
+# 	"psutil==6.0.0",
+	"redis-5.2.1",
+	"requests==2.32.3",
+ 	"rq==2.1.0",
+    "schema ~= 0.7.7",
+    "semantic-version ~= 2.10.0",
+ 	"slack_sdk~=3.31.0",
+	"toml~=0.10.2",
+	"psycopg~=3.2.6"
+]
+
+[project.optional-dependencies]
+development = ["pylint", "twine"]
+
+[project.scripts]
+btu-py = "btu_py.cli:entry_point"

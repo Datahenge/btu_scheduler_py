@@ -1,0 +1,35 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"editor.autoClosingQuotes": "never",
+		"editor.acceptSuggestionOnCommitCharacter": false,
+		"editor.detectIndentation": false,		
+		"editor.insertSpaces": false,		
+		"editor.parameterHints.enabled": false,
+		"editor.quickSuggestions": {
+			"comments": "off",
+			"strings": "off",
+			"other": "off"
+		},
+		"editor.wordBasedSuggestions": "off",		
+		"files.exclude": {
+            "**/.git": true,         // this is a default value
+			"**/__pycache__": true,         // this is a default value
+			"**/.pytest_cache": true,
+			"**/.ipynb_checkpoints": true,
+			"**/MANIFEST.in": true,
+			"**/*.egg-info": true,
+			"pyvenv.d": true,
+			"**/.pylintrc": false,
+			".ipynb_checkpoints": true
+		},
+		"python.defaultInterpreterPath": "pyvenv.d/bin/python",
+		"pylint.path": [
+			"pyvenv.d/bin/pylint"
+		]
+	}
+}

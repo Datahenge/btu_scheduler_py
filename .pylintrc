@@ -1,0 +1,21 @@
+[MESSAGES CONTROL]
+indent-string="\t"
+disable=
+    missing-function-docstring,
+	missing-class-docstring,
+	missing-module-docstring,
+    broad-except,
+	import-outside-toplevel,
+	line-too-long,
+	too-few-public-methods,
+	too-many-arguments,
+	access-member-before-definition,
+	attribute-defined-outside-init,
+	no-member,
+	assigning-non-slot
+
+[LOGGING]
+logging-format-style=old
+
+[FORMAT]
+good-names=ex
