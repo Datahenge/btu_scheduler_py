@@ -6,8 +6,13 @@ from dataclasses import dataclass
 from typing import Union
 from zoneinfo import ZoneInfo
 
+# Third Party
+from rq.job import Job
+
+from btu_py.lib.config import AppConfig
 from btu_py.lib.sql import get_task_schedule_by_id
 from btu_py.lib.structs.sanchez import get_pickled_function_from_web
+from btu_py.lib.utils import whatis
 
 NoneType = type(None)
 
@@ -35,11 +40,10 @@ class RQJob():
 		worker_name: "".to_owned(),
 	}
 	'''
-	pass
 
 
 @dataclass
-class BTUTask():
+class BtuTask():
 	task_key: str
 	desc_short: str
 	desc_long: str
@@ -52,7 +56,10 @@ class BTUTask():
 		pass
 
 	async def convert_to_rqjob(self):
-		pass
+
+		job = Job.create(
+			"foo"
+		)
 		'''
 		let mut new_job: RQJob = RQJob::new_with_defaults();
 		new_job.description = self.desc_short.clone();
@@ -70,7 +77,7 @@ class BTUTask():
 
 
 @dataclass
-class BTUTaskSchedule():
+class BtuTaskSchedule():
 	id: str
 	task: str
 	task_description: str
@@ -85,7 +92,7 @@ class BTUTaskSchedule():
 	@staticmethod
 	async def init_from_task_key(task_key: str) -> object:
 		task_data: dict = await get_task_schedule_by_id(task_key)  # read from the SQL Database
-		return BTUTaskSchedule(
+		return BtuTaskSchedule(
 			id=task_data["name"],
 			task=task_data["task"],
 			task_description=task_data["task_description"],
@@ -102,9 +109,9 @@ class BTUTaskSchedule():
 		rq_job.description = self.task_description
 		rq_job.origin = self.queue_name
 		byte_result = get_pickled_function_from_web(self.task, self.id)
+		whatis(byte_result)
 		# return Err::<RQJob, anyhow::Error>(anyhow_macro!("Error while requesting pickled Python function:\n{}", error_message));
 		return rq_job
-
 
 	def get_next_runtimes(self):
 		pass

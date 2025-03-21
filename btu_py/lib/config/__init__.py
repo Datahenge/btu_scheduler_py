@@ -2,14 +2,16 @@
 
 # Standard library
 import pathlib
-import urllib.parse
-
-import pprint
 import tomllib  # New in Python versions 3.11+.  Useless for writing TOML, but can read it.
+import urllib.parse
+from zoneinfo import ZoneInfo
 
 # Third Party
+import pprint
 from schema import Schema, And, Or, Optional  # pylint: disable=unused-import
 import toml
+
+from btu_py.lib.utils import DictToDot
 
 BASE_DIRECTORY = pathlib.Path("/etc/btu_scheduler")
 
@@ -65,6 +67,7 @@ class AppConfig:
 	}
 
 	# Private objects for this class:
+	dot = None
 	__config_dict = {}
 	__config_file = __DEFAULT_CONFIG_FILE
 	__config_directory = None
@@ -136,13 +139,12 @@ class AppConfig:
 				AppConfig.revert_to_defaults()
 			if not AppConfig.as_dictionary():
 				raise IOError("Failed to initialize main configuration settings.")
-		except FileNotFoundError:
-			print("Warning: Could not read configuration file.")
-			AppConfig.revert_to_defaults()
 
-		# TODO: After the configuration data is loaded, assign more class variables, such as Logging.
-		# if 'log_level' in AppConfig.settings().keys():
-		# 	LoggerConfig.set_default_log_level(AppConfig.settings()['log_level'])
+			# Enable some dot notation, just to make code a bit cleaner
+			AppConfig.dot =  DictToDot(AppConfig.as_dictionary())
+		except FileNotFoundError:
+			print(f"Warning: Could not read configuration file '{AppConfig.get_config_file_path()}'.  Reverting to default values.")
+			AppConfig.revert_to_defaults()
 
 	@staticmethod
 	def __writeback_to_disk():  # pylint: disable=unused-private-member
@@ -190,6 +192,17 @@ class AppConfig:
 			database_name = AppConfig.as_dictionary()["sql_database"]
 			AppConfig.__sql_connection_string = f"postgresql://{user}:{password}@{host}:{port}/{database_name}"
 		return AppConfig.__sql_connection_string
+
+	@staticmethod
+	def logger():
+		if not hasattr(AppConfig, "__logger"):
+			from btu_py.lib.app_logger import build_new_logger
+			AppConfig.__logger = build_new_logger("btu_py", "/etc/btu_scheduler/logs/logger.log")
+		return AppConfig.__logger
+
+	@staticmethod
+	def timezone():
+		return ZoneInfo(AppConfig.as_dictionary()['time_zone_string'])
 
 
 #def set_global_loglevel(new_level):

@@ -5,7 +5,9 @@
 from datetime import datetime
 import inspect
 import ssl
+import time
 
+# Third Party
 import psutil
 from slack_sdk.webhook import WebhookClient
 
@@ -129,3 +131,78 @@ def kill_processes_by_port(port):
 					print(f"Error killing process {proc.pid}: {str(e)}")
 
 	return killed_any
+
+
+class Stopwatch:
+	"""
+	My own take on a stopwatch program.
+	"""
+	def __init__(self, description=None, disable_log=False):
+		"""
+		When 'disable_log' is True, no rows are written to "tabPerformance Log" SQL table.
+		"""
+		self.start = time.perf_counter()
+		self.last_checkpoint = self.start
+		self.description = description or "Stopwatch"
+		self.disable_log = disable_log
+
+	def reset(self):
+		self.start = time.perf_counter()
+		self.last_checkpoint = self.start
+
+	def get_elapsed_seconds_total(self):
+		now = time.perf_counter()
+		seconds_elapsed_start = round(now - self.start,2)
+		return seconds_elapsed_start
+
+	def elapsed(self, prefix=None, no_print=False):
+		"""
+		Print the time elapsed, and write a row to Performance Log.
+		"""
+		now = time.perf_counter()
+		seconds_elapsed_start = round(now - self.start,2)
+		seconds_elapsed_last_checkpoint = round(now - self.last_checkpoint,2)
+
+		# Print a message to stdout
+		if not no_print:
+			message = f"{seconds_elapsed_last_checkpoint} seconds since last Checkpoint, {seconds_elapsed_start} since Start."
+			if prefix or self.description:
+				message = f"---> {prefix or self.description} {message}"
+			print(message)
+
+		# This is now the 'last_checkpoint'
+		self.last_checkpoint = now
+		return seconds_elapsed_start
+
+
+class DictToDot(dict):
+	"""
+	Makes a dictionary accessible via dot notation.
+	"""
+	def __init__(self, *args, **kwargs):
+		super(DictToDot, self).__init__(*args, **kwargs)
+		for arg in args:
+			if isinstance(arg, dict):
+				for k, v in arg.items():
+					self[k] = v
+
+		if kwargs:
+			for k, v in kwargs.items():
+				self[k] = v
+
+	def __getattr__(self, attr):
+		return self.get(attr)
+
+	def __setattr__(self, key, value):
+		self.__setitem__(key, value)
+
+	def __setitem__(self, key, value):
+		super(DictToDot, self).__setitem__(key, value)
+		self.__dict__.update({key: value})
+
+	def __delattr__(self, item):
+		self.__delitem__(item)
+
+	def __delitem__(self, key):
+		super(DictToDot, self).__delitem__(key)
+		del self.__dict__[key]

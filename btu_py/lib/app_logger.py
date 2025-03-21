@@ -3,6 +3,7 @@
 import logging
 import pathlib
 
+
 def build_new_logger(logger_name, logfile_path, stream_to_terminal=False):
 
 	logger = logging.getLogger(logger_name)

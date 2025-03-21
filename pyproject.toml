@@ -23,7 +23,8 @@ classifiers = [
 
 dependencies = [
     "click ~= 8.1.7",
-# 	"psutil==6.0.0",
+ 	"psutil==7.0.0",
+	"psycopg~=3.2.6",
 	"redis-5.2.1",
 	"requests==2.32.3",
  	"rq==2.1.0",
@@ -31,7 +32,6 @@ dependencies = [
     "semantic-version ~= 2.10.0",
  	"slack_sdk~=3.31.0",
 	"toml~=0.10.2",
-	"psycopg~=3.2.6"
 ]
 
 [project.optional-dependencies]

@@ -127,10 +127,10 @@ def cli_test(command):
 			return
 
 		case 'temp':
-			from btu_py.lib.structs import BTUTaskSchedule
+			from btu_py.lib.structs import BtuTaskSchedule
 			from btu_py.lib.sql import get_enabled_tasks
 			asyncio.run(
-				BTUTaskSchedule.init_from_task_key('TS-000002')
+				BtuTaskSchedule.init_from_task_key('TS-000002')
 			)
 			asyncio.run(
 				get_enabled_tasks()
