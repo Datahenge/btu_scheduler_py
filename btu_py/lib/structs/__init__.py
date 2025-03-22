@@ -1,14 +1,16 @@
-
+""" btu_py/lib/structs/__init__.py """
 
 # pylint: disable=too-many-instance-attributes
 
 from dataclasses import dataclass
+from datetime import datetime as DateTimeType
 from typing import Union
 from zoneinfo import ZoneInfo
 
 # Third Party
 from rq.job import Job
 
+from btu_py.lib import btu_cron
 from btu_py.lib.sql import get_task_schedule_by_id
 from btu_py.lib.structs.sanchez import get_pickled_function_from_web
 from btu_py.lib.utils import whatis
@@ -115,5 +117,11 @@ class BtuTaskSchedule():
 		# return Err::<RQJob, anyhow::Error>(anyhow_macro!("Error while requesting pickled Python function:\n{}", error_message));
 		return rq_job
 
-	def get_next_runtimes(self):
-		pass
+	def get_next_runtimes(self, from_utc_datetime=None, number_results=1) -> list[DateTimeType]:
+
+		return btu_cron.tz_cron_to_utc_datetimes(
+				self.cron_string,
+				self.cron_timezone,
+				from_utc_datetime,
+				number_results
+		)

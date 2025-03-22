@@ -180,7 +180,7 @@ def cli_logs(command):
 				"/etc/ftp-docker/logs/docker_build.log"
 			):
 				try:
-					print(f"Truncating log file '{each_file}' ...")
+					print(f"DOES NOT WORK YET Truncating log file '{each_file}' ...")
 					with open(each_file, 'w', encoding="utf-8"):
 						pass
 				except Exception as ex:

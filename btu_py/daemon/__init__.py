@@ -35,7 +35,7 @@ async def main():
 	print("-------------------------------------")
 	print("\nThis daemon performs the following functions:\n")
 	print("1. Performs the role of a Scheduler, enqueuing BTU Task Schedules in Python RQ whenever it's time to run them.")
-	print("2. Performs a full-refresh of BTU Task Schedules every {} seconds.", btu_py.get_config_data().full_refresh_internal_secs)
+	print(f"2. Performs a full-refresh of BTU Task Schedules every {btu_py.get_config_data().full_refresh_internal_secs} seconds.")
 	print("3. Listens on Unix Domain Socket for requests from the Frappe BTU web application.\n")
 
 	# Immediately on startup, Scheduler daemon should populate its internal queue with all BTU Task Schedule identifiers.

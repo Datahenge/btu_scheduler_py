@@ -23,6 +23,8 @@ classifiers = [
 
 dependencies = [
     "click ~= 8.1.7",
+	"cron-converter==1.2.1",
+	"croniter==6.0.0",
  	"psutil==7.0.0",
 	"psycopg~=3.2.6",
 	"redis-5.2.1",

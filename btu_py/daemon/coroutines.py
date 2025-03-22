@@ -7,7 +7,7 @@ import os
 import pathlib
 
 import btu_py
-from btu_py.lib.utils import get_datetime_string, Stopwatch
+from btu_py.lib.utils import Stopwatch
 from btu_py.lib.structs import BtuTaskSchedule
 from btu_py.lib import scheduler
 
@@ -26,7 +26,7 @@ async def internal_queue_consumer(shared_queue):
 			task_schedule: BtuTaskSchedule = await BtuTaskSchedule.init_from_schedule_key(next_task_schedule_id)
 			if task_schedule:
 				scheduler.add_task_schedule_to_rq(task_schedule)
-			print(f"IQM: Added Task Schedule to RQ.  Items remaining in Queue = {shared_queue.qsize()}")
+			print(f"IQM: Added task schedule to Redis Key 'btu_scheduler:task_execution_times'.  Size of internal queue is now {shared_queue.qsize()}")
 
 		await asyncio.sleep(1)  # blocking request for just a moment
 
@@ -48,10 +48,8 @@ async def internal_queue_producer(shared_queue):
 		elapsed_seconds = stopwatch.get_elapsed_seconds_total()  # calculate elapsed seconds since last Queue Repopulate
 		if elapsed_seconds > btu_py.get_config_data().full_refresh_internal_secs:  # If sufficient time has passed ...
 			btu_py.get_logger().info(f"Producer: {elapsed_seconds} seconds have elapsed.  It's time for a full-refresh of the Task Schedules in Redis!")
-			btu_py.get_logger().debug(f"  * Before refill, the queue contains {shared_queue.qsize()} values.")
 			result = await scheduler.queue_full_refill(shared_queue)
 			if result:
-				btu_py.get_logger().debug(f"  * Added {result} values to the internal FIFO queue.")
 				btu_py.get_logger().debug(f"  * Internal queue contains a total of {shared_queue.qsize()} values.")
 				stopwatch.reset()  # reset the stopwatch and begin a new countdown.
 				scheduler.rq_print_scheduled_tasks(False)  # log the Task Schedule:
