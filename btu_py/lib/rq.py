@@ -3,18 +3,18 @@
 import redis
 import rq
 
-from btu_py.lib.config import AppConfig
+import btu_py
 from btu_py.lib.utils import whatis
 
 
 def create_connection():
 
-	if not AppConfig.as_dictionary():
+	if not btu_py.get_config().as_dictionary():
 		raise RuntimeError("Application configuration is not loaded.")
 
 	decoded_connection = redis.Redis(
-		host=AppConfig.as_dictionary()["rq_host"],
-		port=AppConfig.as_dictionary()["rq_port"],
+		host= btu_py.get_config().as_dictionary()["rq_host"],
+		port= btu_py.get_config().as_dictionary()["rq_port"],
 		decode_responses=True)
 	return decoded_connection
 

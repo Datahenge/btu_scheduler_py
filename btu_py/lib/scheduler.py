@@ -2,16 +2,18 @@
 
 # pylint: disable=logging-fstring-interpolation
 
+# import asyncio
 from dataclasses import dataclass
 from datetime import datetime as DateTimeType
-from typing import Union  # pylint: disable=unused-import
+# from typing import Union  # pylint: disable=unused-import
 from zoneinfo import ZoneInfo
 
 import temporal_lib
 
+import btu_py
+from btu_py import get_logger
 from btu_py.lib.rq import create_connection, enqueue_job_immediate
-from btu_py.lib.config import AppConfig
-from btu_py.lib.sql import get_enabled_tasks
+from btu_py.lib.sql import get_enabled_task_schedules
 from btu_py.lib.structs import BtuTaskSchedule
 from btu_py.lib.utils import whatis
 
@@ -160,20 +162,20 @@ def add_task_schedule_to_rq(task_schedule: BtuTaskSchedule):
 	match result:
 
 		case 'redis':
-			AppConfig.logger().debug(f"Result from 'zadd' is Ok, with the following payload: {result}")
+			get_logger().debug(f"Result from 'zadd' is Ok, with the following payload: {result}")
 			# Developer Note: I believe a result of 1 means Redis wrote a new record.
 			#				 A result of 0 means the record already existed, and no write was necessary.
 
 			message1 = f"Task Schedule ID {task_schedule.id} is being monitored for future execution."
 			# If application configuration has a good Time Zone string, print Next Execution Time in local time...
-			if AppConfig.timezone():
-				message2 = f"Next Execution Time ({AppConfig.timezone()}) for Task Schedule {task_schedule} = {rq_scheduled_task.next_datetime_utc.with_timezone(AppConfig.timezone())}"
+			if btu_py.get_config_data().timezone():
+				message2 = f"Next Execution Time ({btu_py.get_config_data().timezone()}) for Task Schedule {task_schedule} = {rq_scheduled_task.next_datetime_utc.with_timezone(btu_py.get_config_data().timezone())}"
 				message3 = f"Next Execution Time (UTC) for Task Schedule {task_schedule.id} = {rq_scheduled_task.next_datetime_utc}"
-				AppConfig.logger().debug(message1, message2, message3)
+				get_logger().debug(message1, message2, message3)
 			else:
 				# Otherwise, just print in UTC
 				message3: f"Next Execution Time (UTC) for Task Schedule {task_schedule.id} = {rq_scheduled_task.next_datetime_utc}"
-				AppConfig.logger().debug(message1, message3)
+				get_logger().debug(message1, message3)
 
 		case _:
 			raise IOError(f"Result from redis 'zadd' is Err, with the following payload: {result}")
@@ -196,22 +198,21 @@ def fetch_task_schedules_ready_for_rq(sched_before_unix_time: int) -> list:
 
 	# rq_print_scheduled_tasks(&app_config);
 
-	AppConfig.logger().debug("Reviewing the 'Next Execution Times' for each Task Schedule in Redis...")
+	get_logger().debug("Reviewing the 'Next Execution Times' for each Task Schedule in Redis...")
 
 	redis_conn = create_connection()
 	if not redis_conn:
-		AppConfig.logger().debug("In lieu of a Redis Connection, returning an empty vector.")
+		get_logger().debug("In lieu of a Redis Connection, returning an empty vector.")
 		return []  # If cannot connect to Redis, do not panic the thread.  Instead, return an empty Vector.
 
 	# TODO: As per Redis 6.2.0, the command 'zrangebyscore' is considered deprecated.
 	# Please prefer using the ZRANGE command with the BYSCORE argument in new code.
-	zranges = redis_conn.zrangebyscore(RQ_KEY_SCHEDULED_TASKS, 0, sched_before_unix_time)
-	whatis(zranges)
+	zranges: list = redis_conn.zrangebyscore(RQ_KEY_SCHEDULED_TASKS, 0, sched_before_unix_time)
 	if not zranges:
 		return []
 
-	if zranges.len() > 0:
-		AppConfig.logger().info(f"Found {zranges.len()} Task Schedules that qualify for immediate execution.")
+	if len(zranges) > 0:
+		get_logger().info(f"Found {zranges.len()} Task Schedules that qualify for immediate execution.")
 
 	# The strings in the vector are a concatenation:  Task Schedule ID, pipe character, Unix Time.
 	# Need to split off the trailing Unix Time, to obtain a list of Task Schedules.
@@ -229,10 +230,10 @@ def check_and_run_eligible_task_schedules(internal_queue: object):
 	"""
 
 	# Developer Note: This function is analgous to the 'rq-scheduler' Python function: 'Scheduler.enqueue_jobs()'
-	task_schedule_instances: list = fetch_task_schedules_ready_for_rq(DateTimeType.now(DateTimeType.timezone.utc).timestamp())
+	task_schedule_instances: list = fetch_task_schedules_ready_for_rq(DateTimeType.now(ZoneInfo('UTC')).timestamp())
 
 	for task_schedule_instance in task_schedule_instances:
-		AppConfig.logger().info(f"Time to make the donuts! (enqueuing Redis Job '{task_schedule_instance.task_schedule_id}' for immediate execution)")
+		get_logger().info(f"Time to make the donuts! (enqueuing Redis Job '{task_schedule_instance.task_schedule_id}' for immediate execution)")
 		run_immediate_scheduled_task(task_schedule_instance, internal_queue)
 		# error!("Error while attempting to run Task Schedule {} : {}", task_schedule_instance.task_schedule_id, err);
 
@@ -242,26 +243,26 @@ def run_immediate_scheduled_task(task_schedule_instance: object, internal_queue:
 	# 0. First remove the Task from the Schedule (so it doesn't get executed twice)
 	redis_conn = create_connection()
 	if not redis_conn:
-		AppConfig.logger().warning("Early exit from run_immediate_scheduled_task(); cannot establish a connection to Redis database.")
+		get_logger().warning("Early exit from run_immediate_scheduled_task(); cannot establish a connection to Redis database.")
 		return  # If cannot connect to Redis, do not panic the thread.  Instead, return an empty Vector.
 
 	redis_result = redis_conn.zrem(RQ_KEY_SCHEDULED_TASKS, task_schedule_instance.to_tsik())
 	if redis_result != 1:
-		AppConfig.logger().error(f"Unable to remove Task Schedule Instance using 'zrem'.  Response from Redis = {redis_result}")
+		get_logger().error(f"Unable to remove Task Schedule Instance using 'zrem'.  Response from Redis = {redis_result}")
 
 	# 1. Read the MariaDB database to construct a BTU Task Schedule struct.
-	task_schedule = BtuTaskSchedule.init_from_task_key(task_schedule_instance.task_schedule_id)
+	task_schedule = BtuTaskSchedule.init_from_schedule_key(task_schedule_instance.task_schedule_id)
 	if not task_schedule:
 		raise IOError("Unable to read Task Schedule from MariaDB database.")
 
 	# 2. Exit early if the Task Schedule is disabled (this should be a rare scenario, but definitely worth checking.)
 	if task_schedule.enabled:
-		AppConfig.logger().warning(f"Task Schedule {task_schedule.id} is disabled in SQL database; BTU will neither execute nor re-queue.")
+		get_logger().warning(f"Task Schedule {task_schedule.id} is disabled in SQL database; BTU will neither execute nor re-queue.")
 		raise RuntimeError(f"Task Schedule {task_schedule.id} is disabled in SQL database; BTU will not execute or re-queue.")
 
 	# 3. Create an RQ Job from the BtuTask struct.
 	rq_job = task_schedule.to_rq_job()
-	AppConfig.logger().debug(f"Created an RQJob object: {rq_job}")
+	get_logger().debug(f"Created an RQJob object: {rq_job}")
 
 	# 4. Save the new Job into Redis.
 	rq_job.save_to_redis()
@@ -269,9 +270,9 @@ def run_immediate_scheduled_task(task_schedule_instance: object, internal_queue:
 	# 5. Enqueue that job for immediate execution.
 	try:
 		enqueue_job_immediate(rq_job.job_key_short)
-		AppConfig.logger().info(f"Successfully enqueued: '{rq_job.job_key_short}'")
+		get_logger().info(f"Successfully enqueued: '{rq_job.job_key_short}'")
 	except Exception as ex:
-		AppConfig.logger().error(f"Error while attempting to queue job for execution: {ex}")
+		get_logger().error(f"Error while attempting to queue job for execution: {ex}")
 
 	# 6. Recalculate the next Run Time.
 	#	  Easy enough; just push the Task Schedule ID back into the -Internal- Queue!
@@ -285,7 +286,7 @@ def rq_get_scheduled_tasks() -> list:
 	"""
 	redis_conn = create_connection()
 	if not redis_conn:
-		AppConfig.logger().debug("In lieu of a Redis Connection, returning an empty vector.")
+		get_logger().debug("In lieu of a Redis Connection, returning an empty vector.")
 		return []
 
 	redis_result: [] = redis_conn.zscan(RQ_KEY_SCHEDULED_TASKS)  # list of tuples
@@ -293,7 +294,7 @@ def rq_get_scheduled_tasks() -> list:
 	wrapped_result = [ RQScheduledTask.from_tsik(each) for each in redis_result ]  # list of RQSchedule Task;  Map It?
 	if number_results != wrapped_result.len():
 		message_string = f"Unexpected Error: Number values in Redis: {number_results}.  Number values in VecRQScheduledTask: {wrapped_result}"
-		AppConfig.logger.error(message_string)
+		get_logger().error(message_string)
 		raise RuntimeError(message_string)
 	return wrapped_result
 
@@ -318,15 +319,15 @@ def rq_cancel_scheduled_task(task_schedule_id: str) -> tuple:
 				removed = True
 
 	if removed:
-		AppConfig.logger().info("Scheduled Task successfully removed from Redis Queue.")
+		get_logger().info("Scheduled Task successfully removed from Redis Queue.")
 	else:
-		AppConfig.logger().info("Scheduled Task not found in Redis Queue.")
+		get_logger().info("Scheduled Task not found in Redis Queue.")
 
 
 def rq_print_scheduled_tasks(to_stdout: bool):
 
 	tasks: list = rq_get_scheduled_tasks()
-	local_time_zone = AppConfig.timezone()
+	local_time_zone = btu_py.get_config_data().timezone()
 
 	print(f"There are {tasks.len()} BTU Tasks scheduled for automatic execution.")
 	for result in sorted(tasks, lambda x: x.id):
@@ -335,7 +336,7 @@ def rq_print_scheduled_tasks(to_stdout: bool):
 		if to_stdout:
 			print(f"{message}")
 		else:
-			AppConfig.logger().info(message)
+			get_logger().info(message)
 
 
 
@@ -344,11 +345,13 @@ async def queue_full_refill(internal_queue: object) -> int:
 	Queries the Frappe database, adding every active Task Schedule to BTU internal queue.
 	"""
 	rows_added = 0
-	enabled_tasks = await get_enabled_tasks()
-	for each_row in enabled_tasks:
-		print(f"each_row: {each_row}")
-		internal_queue.push_back(each_row)
+	enabled_schedules =  await (get_enabled_task_schedules())
+	print(f"Found {len(enabled_schedules)} enabled Task Schedules.")
+	for each_row in enabled_schedules:  # each_row is a dictionary with 2 keys: 'name' and 'desc_short'
+		await internal_queue.put(each_row['schedule_key'])  # add the schedule_key ('name') of a BTU Task Schedule document.
 		rows_added += 1
+
+	print(f"queue_full_refill() - Added {rows_added} rows to daemon's internal queue.")
 	return rows_added
 
 

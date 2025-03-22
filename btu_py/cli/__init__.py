@@ -3,8 +3,9 @@
 # Standard Library
 import asyncio
 import json
-import logging	# Enable debug logging
+import logging
 import os
+import pathlib
 import ssl
 import subprocess
 import sys
@@ -13,8 +14,8 @@ import sys
 import click
 
 # Package
+import btu_py
 from btu_py import __version__
-from btu_py.lib.config import AppConfig
 from btu_py.lib.utils import get_datetime_string, send_message_to_slack, whatis  # pylint: disable=unused-import
 
 VERBOSE_MODE = False
@@ -35,12 +36,6 @@ def entry_point(verbose):
 		VERBOSE_MODE = True
 		click.echo(f"Verbose mode is {'on' if verbose else 'off'}.")
 
-	try:
-		AppConfig.init_config_from_files()
-	except Exception as ex:  # pylint: disable=broad-exception-caught
-		print(f"Unhandled exception in function entry_point() : {ex}")
-		sys.exit(1)
-
 # ========
 # Click commands begin here.
 # ========
@@ -53,7 +48,7 @@ def cmd_about():
 	print(f"ftp-docker version {__version__}")
 	print("Copyright (C) 2024")
 	print("\nConfigured images:")
-	image_uids = [ each['key'] for each in AppConfig.get_all_images() ]
+	image_uids = [ each['key'] for each in btu_py.get_config().get_all_images() ]
 	for each_uid in image_uids:
 		print(f"	{each_uid}")
 
@@ -66,12 +61,12 @@ def cmd_config(command):
 	"""
 	match command.split():
 		case ['show']:
-			AppConfig.print_config()
+			btu_py.get_config().print_config()
 		case [ 'edit']:
 			editor = '/usr/bin/editor'  # On Linux this is a link, configured by 'alternatives'
 			if not editor:
 				raise RuntimeError("No value is set for Linux environment variable $EDITOR.")
-			os.system(f"{editor} {AppConfig.get_config_file_path()}")
+			os.system(f"{editor} {btu_py.get_config().get_config_file_path()}")
 		case _:
 			print(f"Subcommand '{command}' not recognized.")
 
@@ -120,7 +115,7 @@ def cli_test(command):
 
 			# Test Two
 			message = f"{get_datetime_string()} : This is a test initiated by the 'btu-py' CLI application.\nNothing to see here; move along!"
-			if send_message_to_slack(AppConfig, message):
+			if send_message_to_slack(btu_py.get_config(), message):
 				print("\u2713 Second test successful.  Please examine Slack to find a test message.")
 			else:
 				print("\u2717 Second test failed.")
@@ -130,7 +125,7 @@ def cli_test(command):
 			from btu_py.lib.structs import BtuTaskSchedule
 			from btu_py.lib.sql import get_enabled_tasks
 			asyncio.run(
-				BtuTaskSchedule.init_from_task_key('TS-000002')
+				BtuTaskSchedule.init_from_schedule_key('TS-000002')
 			)
 			asyncio.run(
 				get_enabled_tasks()
@@ -205,3 +200,25 @@ def cli_logs(command):
 
 		case _:
 			print(f"Subcommand '{command}' not recognized.")
+
+
+@entry_point.command('prepare')
+def cli_prepare():
+
+	linux_user =  os.getlogin()
+	socket_parent = pathlib.Path("/run/btu_daemon")
+
+	print("Warning: You may need to elevate to root, so it can alter permissions for the Unix Domain Socket file.\n")
+
+	if not socket_parent.exists():
+		print(f"Creating new directory: {socket_parent}")
+		subprocess.run(['sudo', 'mkdir', socket_parent.name], capture_output=True, text=True, check=True)
+
+	if socket_parent.exists():
+		print("\u2713 Path exists.")
+
+	print(f"Granting Linux user {linux_user} full permissions to Socket file's parent directory.")
+	subprocess.run(['sudo', 'chown', 'sysop:sysop', '/run/btu_daemon'], capture_output=True, text=True, check=True)
+
+	result = subprocess.run(['ls', '-la', socket_parent.name], capture_output=True, text=True, check=True)
+	print(result.stdout)

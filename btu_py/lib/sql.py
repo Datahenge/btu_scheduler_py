@@ -1,16 +1,15 @@
+""" btu_py/lib/sql.py """
 
 import psycopg
 from psycopg.rows import dict_row
-
-from btu_py.lib.config import AppConfig
+from btu_py import get_config
 
 
 async def create_connection():
 
-	# print(f"Postgres Connection String:\n{AppConfig.get_sql_connection_string()}")
-
+	# print(f"Postgres Connection String:\n{get_config().get_sql_connection_string()}")
 	aconn = await psycopg.AsyncConnection.connect(
-		AppConfig.get_sql_connection_string(),
+		get_config().get_sql_connection_string(),
 		row_factory=dict_row
 	)
 	return aconn
@@ -43,6 +42,7 @@ async def get_task_schedule_by_id(task_schedule_id: str) -> dict:
 	
 		WHERE
 			TaskSchedule.name = %(task_schedule_id)s
+
 		LIMIT 1;
 		"""
 
@@ -92,6 +92,26 @@ async def get_enabled_tasks() -> list:
 		WHERE
 			docstatus = 1
 		AND task_type = 'Persistent';
+	"""
+	aconn = await create_connection()
+	async with aconn.cursor() as acur:
+		acursor: psycopg.AsyncCursor = await acur.execute(query_string)
+		sql_rows: list = await acursor.fetchall()
+		return sql_rows
+
+
+async def get_enabled_task_schedules() -> list:
+	"""
+	Returns a list of all enable BTU Task Schedule records from Frappe SQL database.
+	"""
+	query_string = """
+		SELECT
+			 name			AS schedule_key
+			,task			AS task_key
+		FROM
+			"tabBTU Task Schedule"
+		WHERE
+			enabled = 1;
 	"""
 	aconn = await create_connection()
 	async with aconn.cursor() as acur:

@@ -9,7 +9,6 @@ from zoneinfo import ZoneInfo
 # Third Party
 from rq.job import Job
 
-from btu_py.lib.config import AppConfig
 from btu_py.lib.sql import get_task_schedule_by_id
 from btu_py.lib.structs.sanchez import get_pickled_function_from_web
 from btu_py.lib.utils import whatis
@@ -90,18 +89,21 @@ class BtuTaskSchedule():
 	redis_job_id: Union[NoneType, str] = None  # Not all schedules will have a Redis Job yet
 
 	@staticmethod
-	async def init_from_task_key(task_key: str) -> object:
-		task_data: dict = await get_task_schedule_by_id(task_key)  # read from the SQL Database
+	async def init_from_schedule_key(schedule_key: str) -> object:
+		schedule_data: dict = await get_task_schedule_by_id(schedule_key)  # read from the SQL Database
+		if not schedule_data:
+			raise IOError(f"No SQL row returned by get_task_schedule_by_id() for primary key = '{schedule_key}'")
+
 		return BtuTaskSchedule(
-			id=task_data["name"],
-			task=task_data["task"],
-			task_description=task_data["task_description"],
-			enabled=task_data["enabled"],
-			queue_name=task_data["queue_name"],
-			argument_overrides=task_data["argument_overrides"],
-			schedule_description=task_data["schedule_description"],
-			cron_string=task_data["cron_string"],
-			cron_timezone=task_data["cron_timezone"],
+			id=schedule_data["name"],
+			task=schedule_data["task"],
+			task_description=schedule_data["task_description"],
+			enabled=schedule_data["enabled"],
+			queue_name=schedule_data["queue_name"],
+			argument_overrides=schedule_data["argument_overrides"],
+			schedule_description=schedule_data["schedule_description"],
+			cron_string=schedule_data["cron_string"],
+			cron_timezone=schedule_data["cron_timezone"],
 		)
 
 	def to_rq_job(self):

@@ -4,10 +4,10 @@ import logging
 import pathlib
 
 
-def build_new_logger(logger_name, logfile_path, stream_to_terminal=False):
+def build_new_logger(logger_name: str, logfile_path, logging_level: str, stream_to_terminal=True):
 
 	logger = logging.getLogger(logger_name)
-	logger.level = logging.DEBUG
+	logger.level = logging.getLevelName(logging_level)  # determine the Level from the application's configuration.
 	logger.handlers = []
 	logger.propagate = False  # prevents automatically writing to STDOUT
 
@@ -21,12 +21,17 @@ def build_new_logger(logger_name, logfile_path, stream_to_terminal=False):
 	logger.addHandler(handler_file)  # finally, add the handler to the custom logger
 
 	if stream_to_terminal:
+		logger.propagate = True
+		print("Logger will also stream to the terminal.")
 		handler_stream = logging.StreamHandler()
+		handler_stream.setFormatter(formatter)
 		logger.addHandler(handler_stream)  # finally, add the handler to the custom logger
 
 	return logger
 
 
+# pylint: disable=pointless-string-statement
+'''
 def new_subprocess_logger(logfile_path: str, stream_to_terminal=False):
 
 	logger = logging.getLogger('ftp-docker-subprocess')
@@ -50,3 +55,4 @@ def new_subprocess_logger(logfile_path: str, stream_to_terminal=False):
 		logger.addHandler(handler_stream)  # finally, add the handler to the custom logger
 
 	return logger
+'''

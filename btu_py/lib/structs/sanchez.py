@@ -1,7 +1,7 @@
+""" btu_py/lib/structus/sanchez.py """
 
 import requests
-
-from btu_py.lib.config import AppConfig
+from btu_py import get_config_data
 from btu_py.lib.utils import whatis
 
 NoneType = type(None)
@@ -12,15 +12,15 @@ async def get_pickled_function_from_web(task_id: str, task_schedule_id: (str, No
 	Call ERPNext REST API and acquire pickled Python function as bytes.
 	"""
 
-	if AppConfig.get('webserver_port') == 443:
-		url = f"https://{AppConfig.get('webserver_ip')}/api/method/btu.btu_api.endpoints.get_pickled_task"
+	if get_config_data().webserver_port == 443:
+		url = f"https://{get_config_data().webserver_ip}/api/method/btu.btu_api.endpoints.get_pickled_task"
 	else:
-		url = f"http://{AppConfig.get('webserver_ip')}:{AppConfig.get('webserver_port')}/api/method/btu.btu_api.endpoints.get_pickled_task"
+		url = f"http://{get_config_data().webserver_ip}:{get_config_data().webserver_port}/api/method/btu.btu_api.endpoints.get_pickled_task"
 
 	headers = {
-		"Authorization": AppConfig.get('webserver_token'),
+		"Authorization": get_config_data().webserver_token,
 		"Content-Type": "application/json",
-		"Host": AppConfig.get('webserver_host_header')
+		"Host": get_config_data().webserver_host_header
 	}
 	if not headers["Host"]:
 		headers.pop("Host")

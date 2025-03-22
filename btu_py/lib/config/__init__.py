@@ -1,6 +1,8 @@
 """ ftp_py_docker/config.py """
 
 # Standard library
+import copy
+from dataclasses import dataclass, field
 import pathlib
 import tomllib  # New in Python versions 3.11+.  Useless for writing TOML, but can read it.
 import urllib.parse
@@ -11,6 +13,7 @@ import pprint
 from schema import Schema, And, Or, Optional  # pylint: disable=unused-import
 import toml
 
+from btu_py.lib.app_logger import build_new_logger
 from btu_py.lib.utils import DictToDot
 
 BASE_DIRECTORY = pathlib.Path("/etc/btu_scheduler")
@@ -53,116 +56,110 @@ def get_config_schema():
 	return result
 
 
+def get_default_config_template():
+	# WARNING: Do not use 'None' as a value or the entire key will be left out of TOML file.
+	return {
+		"description": "BTU-PY Configuration",
+		"debug_mode": False,
+	}
+
+
+@dataclass
 class AppConfig:
 	"""
 	Class to hold application configuration data.
 	This approach avoids import side effects, and polluting any namespaces.
 	"""
-	__DEFAULT_CONFIG_FILE = BASE_DIRECTORY / "btu_scheduler.toml"
+	__logger: object
+	__sql_connection_string: str
+	__data_dict: dict = field(default_factory=dict)
 
-	# WARNING: Do not use 'None' as a value or the entire key will be left out of TOML file.
-	__default_config_template = {
-		"description": "BTU-PY Configuration",
-		"debug_mode": False,
-	}
+	# Dataclass attributes with Defaults:
+	__config_directory: str = copy.copy(BASE_DIRECTORY)
+	__config_file_path: pathlib.Path =  BASE_DIRECTORY / "btu_scheduler.toml"
+	data: object = None  # this will end up being a list of attributes, accessible via dot notation
 
-	# Private objects for this class:
-	dot = None
-	__config_dict = {}
-	__config_file = __DEFAULT_CONFIG_FILE
-	__config_directory = None
+	def __init__(self):
+		self.init_config_from_files()
 
-	@staticmethod
-	def get(key):
-		return AppConfig.as_dictionary()[key]
+	def get(self, key):
+		return self.as_dictionary()[key]
 
-	@staticmethod
-	def as_dictionary():
+	def as_dictionary(self):
 		"""
 		Return the configuration as a Python dictionary.
 		"""
-		return AppConfig.__config_dict
+		return self.__data_dict
 
-	@staticmethod
-	def get_config_file_path():
+	def get_config_file_path(self):
 		"""
 		Return a path to the main configuration file.
 		"""
-		return AppConfig.__config_file
+		return self.__config_file_path
 
-	@staticmethod
-	def get_config_directory_path():
+	def get_config_directory_path(self):
 		"""
 		Return a path to the main configuration file.
 		"""
-		return AppConfig.__config_directory
+		return self.__config_directory
 
-	@staticmethod
-	def debug_mode_enabled():
+	def debug_mode_enabled(self):
 		"""
 		Is the application running in "Debugging Mode"?
 		"""
-		return bool(AppConfig.as_dictionary().get('debug_mode', False))
+		return bool(self.as_dictionary().get('debug_mode', False))
 
-	@staticmethod
-	def print_config():
+	def print_config(self):
 		"""
 		Print the main configuration settings to stdout.
 		"""
 		print()  # empty line for aesthetics
 		printer = pprint.PrettyPrinter(indent=4, compact=False)
-		printer.pprint(AppConfig.as_dictionary())
+		printer.pprint(self.as_dictionary())
 		print()  # empty line for aesthetics
 
-	@staticmethod
-	def __read_configuration_from_disk():
+	def __read_configuration_from_disk(self):
 		"""
 		Load the main configuration file into memory.
 		"""
-		with AppConfig.get_config_file_path().open(mode="rb") as fstream:
+		with self.get_config_file_path().open(mode="rb") as fstream:
 			data_dictionary = tomllib.load(fstream)
 
 		get_config_schema().validate(data_dictionary)
-		AppConfig.__config_dict = data_dictionary
-		return AppConfig.as_dictionary()
+		self.__data_dict = data_dictionary
 
-	@staticmethod
-	def init_config_from_files(path_to_config_file=None):
+	def init_config_from_files(self):
 		"""
 		Load from data files if they exist.  Otherwise create new, default files.
 		"""
 		try:
-			if path_to_config_file:
-				AppConfig.__config_file = pathlib.Path(path_to_config_file)  # set path to the requested argument
-			AppConfig.__read_configuration_from_disk()
-			if not AppConfig.as_dictionary():  # If file is empty:
-				AppConfig.revert_to_defaults()
-			if not AppConfig.as_dictionary():
+			self.__read_configuration_from_disk()
+			if not self.as_dictionary():  # If file is empty:
+				self.revert_to_defaults()
+			if not self.as_dictionary():
 				raise IOError("Failed to initialize main configuration settings.")
 
 			# Enable some dot notation, just to make code a bit cleaner
-			AppConfig.dot =  DictToDot(AppConfig.as_dictionary())
+			self.data =  DictToDot(self.as_dictionary())
 		except FileNotFoundError:
-			print(f"Warning: Could not read configuration file '{AppConfig.get_config_file_path()}'.  Reverting to default values.")
-			AppConfig.revert_to_defaults()
+			print(f"Warning: Could not read configuration file '{self.get_config_file_path()}'.  Reverting to default values.")
+			self.revert_to_defaults()
 
-	@staticmethod
-	def __writeback_to_disk():  # pylint: disable=unused-private-member
+	def __writeback_to_disk(self):  # pylint: disable=unused-private-member
 		"""
 		Write the in-memory configuration data back to disk.
 		"""
 		#a_logger = make_logger(__name__)
 		#a_logger.info("Writing new main configuration (from default template) to disk.")
 
-		with open(AppConfig.get_config_file_path(), "w", encoding="utf-8") as fstream:
-			toml.dump(AppConfig.as_dictionary(), fstream)
+		with open(self.get_config_file_path(), "w", encoding="utf-8") as fstream:
+			toml.dump(self.as_dictionary(), fstream)
 
-	@staticmethod
-	def revert_to_defaults():
+	def revert_to_defaults(self):
 		"""
 		Revert main configuration file to default setting.
 		"""
-		new_file_path = AppConfig.get_config_file_path()
+		new_file_path = self.get_config_file_path()
 		print(f"Warning: Creating a new, default configuration file: {new_file_path.absolute()}")
 
 		# If necessary, create the parent directories for the configuration file.
@@ -174,41 +171,35 @@ class AppConfig:
 
 		# 1. Write the default configuration data to disk in TOML format.
 		with open(new_file_path, mode="wb") as fstream:
-			toml.dump(AppConfig.__default_config_template, fstream)
+			toml.dump(self.__default_config_template, fstream)
 
 		# 2. Try to read it back.
-		AppConfig.__read_configuration_from_disk()
+		self.__read_configuration_from_disk()
 
-	@staticmethod
-	def get_sql_connection_string():
+	def get_sql_connection_string(self):
 		"""
 		Create a connection string to a Postgres database.
 		"""
-		if not hasattr(AppConfig, "__sql_connection_string"):
-			user = urllib.parse.quote(AppConfig.as_dictionary()["sql_user"])
-			password = urllib.parse.quote(AppConfig.as_dictionary()["sql_password"])
-			host = AppConfig.as_dictionary()["sql_host"]
-			port = AppConfig.as_dictionary()["sql_port"]
-			database_name = AppConfig.as_dictionary()["sql_database"]
-			AppConfig.__sql_connection_string = f"postgresql://{user}:{password}@{host}:{port}/{database_name}"
-		return AppConfig.__sql_connection_string
+		if not hasattr(self, "__sql_connection_string") or (not self.__sql_connection_string):
+			user = urllib.parse.quote(self.as_dictionary()["sql_user"])
+			password = urllib.parse.quote(self.as_dictionary()["sql_password"])
+			host = self.as_dictionary()["sql_host"]
+			port = self.as_dictionary()["sql_port"]
+			database_name = self.as_dictionary()["sql_database"]
+			self.__sql_connection_string = f"postgresql://{user}:{password}@{host}:{port}/{database_name}"
+		return self.__sql_connection_string
 
-	@staticmethod
-	def logger():
-		if not hasattr(AppConfig, "__logger"):
-			from btu_py.lib.app_logger import build_new_logger
-			AppConfig.__logger = build_new_logger("btu_py", "/etc/btu_scheduler/logs/logger.log")
-		return AppConfig.__logger
+	def get_logger(self):
+		"""
+		Returns the instance of logger associated with this configuration.
+		"""
+		if (not hasattr(self, '_AppConfig__logger')) or (not self.__logger):
+			print("Constructing a new logger ...")
+			self.__logger = build_new_logger("btu_py", "/etc/btu_scheduler/logs/logger.log", self.data.tracing_level)
+		return self.__logger
 
-	@staticmethod
-	def timezone():
-		return ZoneInfo(AppConfig.as_dictionary()['time_zone_string'])
-
-
-#def set_global_loglevel(new_level):
-#	logger_level_names = [d['name'] for d in LoggerConfig.list_available_levels()]
-#	if new_level not in logger_level_names:
-#		raise Exception(f'New logger level {new_level} is not a valid level name.')
-#	AppConfig.settings()['log_level'] = new_level
-#	AppConfig.writeback_to_file()
-#	LoggerConfig.set_default_log_level(new_level)
+	def timezone(self) -> ZoneInfo:
+		"""
+		Return a ZoneInfo object for the application's preferred Time Zone.
+		"""
+		return ZoneInfo(self.data.time_zone_string)
