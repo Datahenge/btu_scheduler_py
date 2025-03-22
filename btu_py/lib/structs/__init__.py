@@ -7,40 +7,13 @@ from datetime import datetime as DateTimeType
 from typing import Union
 from zoneinfo import ZoneInfo
 
-# Third Party
-from rq.job import Job
-
 from btu_py.lib import btu_cron
+from btu_py.lib.rq import RQJobWrapper
 from btu_py.lib.sql import get_task_schedule_by_id
 from btu_py.lib.structs.sanchez import get_pickled_function_from_web
 from btu_py.lib.utils import whatis
 
 NoneType = type(None)
-
-
-class RQJob():
-	'''
-	# example: 11f83e81-83ea-4df2-aa7e-cd12d8dec779
-	let uuid_string: String = Uuid::new_v4().to_hyphenated().to_string();
-	RQJob {
-		job_key: format!("{}:{}", RQ_JOB_PREFIX, uuid_string),  // str(uuid4())
-		job_key_short: uuid_string,
-		created_at: chrono::offset::Utc::now(),
-		description: "".to_owned(),
-		data: Vec::new(),
-		ended_at: None,
-		enqueued_at: None,  // not initially populated
-		exc_info: None,
-		last_heartbeat: chrono::offset::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-		meta: None,
-		origin: "erpnext-mybench:default".to_owned(),  // begin with the queue named 'default'
-		result_ttl: None,
-		started_at: None,
-		status: None,
-		timeout: 3600,  // default of 3600 seconds (1 hour)
-		worker_name: "".to_owned(),
-	}
-	'''
 
 
 @dataclass
@@ -56,25 +29,16 @@ class BtuTask():
 	async def init_from_sql(task_key: str):
 		pass
 
-	async def convert_to_rqjob(self):
-
-		job = Job.create(
-			"foo"
-		)
-		'''
-		let mut new_job: RQJob = RQJob::new_with_defaults();
-		new_job.description = self.desc_short.clone();
-		match crate::get_pickled_function_from_web(&self.task_key, None, app_config) {
-			Ok(byte_result) => {
-				new_job.data = byte_result;
-			}
-			Err(error_message) => {
-				panic!("Error while requesting pickled Python function:\n{}", error_message);
-			}
-		}
-		new_job.timeout = self.max_task_duration;
-		new_job
-		'''
+	async def convert_to_wrapped_rq_job(self) -> RQJobWrapper:
+		"""
+		Use a BTU Task record to construct an RQ Job Wrapper; don't modify Redis yet.
+		"""
+		wrapped_job = RQJobWrapper.new_with_defaults()
+		wrapped_job.description = self.desc_short
+		byte_result = get_pickled_function_from_web(self.task_key, None)
+		wrapped_job.data = byte_result
+		wrapped_job.timeout = self.max_task_duration
+		return wrapped_job
 
 
 @dataclass
@@ -108,14 +72,20 @@ class BtuTaskSchedule():
 			cron_timezone=schedule_data["cron_timezone"],
 		)
 
-	def to_rq_job(self):
-		rq_job = RQJob()  # RQJob::new_with_defaults();
-		rq_job.description = self.task_description
-		rq_job.origin = self.queue_name
-		byte_result = get_pickled_function_from_web(self.task, self.id)
+	async def to_rq_job(self):
+		"""
+		Given a BTU Task Schedule, construct an instance of RQJobWrapper; does not modify Redis.
+		"""
+		wrapped_job = RQJobWrapper.new_with_defaults()
+		wrapped_job.description = self.task_description
+		wrapped_job.origin = self.queue_name
+
+		byte_result = await get_pickled_function_from_web(self.task, self.id)
 		whatis(byte_result)
-		# return Err::<RQJob, anyhow::Error>(anyhow_macro!("Error while requesting pickled Python function:\n{}", error_message));
-		return rq_job
+
+		wrapped_job.data = byte_result
+		wrapped_job.timeout = self.max_task_duration
+		return wrapped_job
 
 	def get_next_runtimes(self, from_utc_datetime=None, number_results=1) -> list[DateTimeType]:
 

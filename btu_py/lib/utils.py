@@ -2,7 +2,7 @@
 
 # NOTE: Functions here should not depend on other ftp-docker Python modules.
 
-from datetime import datetime
+from datetime import datetime as DateTimeType
 import inspect
 import ssl
 import time
@@ -63,14 +63,6 @@ def whatis(message):
 	msg += f"\n  * Caller: {parent_caller_function}"
 	msg += f"\n  * Caller Path: {parent_caller_path}\n  * Caller Line: {parent_caller_line}\n"
 	print(msg)
-
-
-def get_datetime_string():
-	"""
-	Return the current datetime in ISO 8601 format.
-	"""
-	now = datetime.now()
-	return now.strftime("%Y-%m-%d %H:%M:%S")
 
 
 def send_message_to_slack(app_config, message_string: str) -> bool:
@@ -206,3 +198,22 @@ class DictToDot(dict):
 	def __delitem__(self, key):
 		super(DictToDot, self).__delitem__(key)
 		del self.__dict__[key]
+
+
+def get_datetime_string():
+	"""
+	Return the current datetime in ISO 8601 format.
+	"""
+	return DateTimeType.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def utc_to_rq_string(datetime_utc: DateTimeType) -> str:
+	#  The format is VERY important.  If the UTC DateTime is not correctly formatted,
+	#  it *will crash* the Python RQ Worker.
+
+	# 2022-12-01T08:32:20.580242150Z
+	# 2022-12-01T08:32:20Z
+
+	result = datetime_utc.isoformat()
+	print(f"utc_to_rq_string() >>> {result}")
+	return result

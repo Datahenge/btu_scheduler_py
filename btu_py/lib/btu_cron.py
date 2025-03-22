@@ -5,12 +5,14 @@ from __future__ import annotations  # Defers evalulation of type annonations; ho
 from dataclasses import dataclass
 from datetime import datetime as DateTimeType
 from zoneinfo import ZoneInfo
+
 # Third Party
 from croniter import croniter
 from temporal_lib.core import make_datetime_naive, localize_datetime
+
 # BTU
 import btu_py
-from btu_py.lib.utils import whatis
+from btu_py.lib.utils import whatis  # pylint: disable=unused-import
 
 
 NoneType = type(None)

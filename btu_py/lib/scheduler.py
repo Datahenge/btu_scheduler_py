@@ -2,13 +2,11 @@
 
 # pylint: disable=logging-fstring-interpolation
 
-# import asyncio
 from dataclasses import dataclass
 from datetime import datetime as DateTimeType
-# from typing import Union  # pylint: disable=unused-import
 from zoneinfo import ZoneInfo
 
-from temporal_lib.core import localize_datetime, make_datetime_naive
+from temporal_lib.core import localize_datetime
 
 import btu_py
 from btu_py import get_logger
@@ -189,19 +187,17 @@ def fetch_task_schedules_ready_for_rq(sched_before_unix_time: int) -> list:
 	"""
 	Read the BTU section of RQ, and return the Jobs that are scheduled to execute before a specific Unix Timestamp.
 	"""
-
-	# Developer Notes: Some cleverness below, courtesy of 'rq-scheduler' project.  For this particular key, the Z-score
-	# represents the Unix Timestamp the Job is supposed to execute on.
-	# By fetching ALL values below a certain threshold (Timestamp), the program knows precisely which Task Schedules to enqueue...
+	# NOTE: Some cleverness below, courtesy of 'rq-scheduler' project.  For this particular key, the Z-score
+	# represents the Unix Timestamp the Job is supposed to execute on.  By fetching ALL values below a certain
+	# threshold (Timestamp), the program knows precisely which Task Schedules to enqueue.
 
 	# rq_print_scheduled_tasks(&app_config);
 
 	get_logger().debug("Reviewing the 'Next Execution Times' for each Task Schedule in Redis...")
-
 	redis_conn = create_connection()
 	if not redis_conn:
-		get_logger().debug("In lieu of a Redis Connection, returning an empty vector.")
-		return []  # If cannot connect to Redis, do not panic the thread.  Instead, return an empty Vector.
+		get_logger().debug("fetch_task_schedules_ready_for_rq(): Cannot establish connection to Redis; returning an empty list.")
+		return []
 
 	# TODO: As per Redis 6.2.0, the command 'zrangebyscore' is considered deprecated.
 	# Please prefer using the ZRANGE command with the BYSCORE argument in new code.
@@ -221,7 +217,7 @@ def fetch_task_schedules_ready_for_rq(sched_before_unix_time: int) -> list:
 	return task_schedules_to_enqueue
 
 
-def check_and_run_eligible_task_schedules(internal_queue: object):
+async def check_and_run_eligible_task_schedules(internal_queue: object):
 	"""
 	Examine the Next Execution Time for all scheduled RQ Jobs (this information is stored in RQ as a Unix timestamps)
 	If the Next Execution Time is in the past?  Then place the RQ Job into the appropriate queue.  RQ and Workers take over from there.
@@ -233,55 +229,49 @@ def check_and_run_eligible_task_schedules(internal_queue: object):
 	get_logger().info(f"Current Timestamp (UTC) is {current_timestamp}")
 
 	# Developer Note: This function is analgous to the 'rq-scheduler' Python function: 'Scheduler.enqueue_jobs()'
-	task_schedule_instances: list = fetch_task_schedules_ready_for_rq(current_timestamp)
-
-	for task_schedule_instance in task_schedule_instances:
-		get_logger().info(f"Time to make the donuts! (enqueuing Redis Job '{task_schedule_instance.task_schedule_id}' for immediate execution)")
-		run_immediate_scheduled_task(task_schedule_instance, internal_queue)
-		# error!("Error while attempting to run Task Schedule {} : {}", task_schedule_instance.task_schedule_id, err);
+	for task_schedule_instance in fetch_task_schedules_ready_for_rq(current_timestamp):
+		await run_immediate_scheduled_task(task_schedule_instance, internal_queue)
 
 
-def run_immediate_scheduled_task(task_schedule_instance: RQScheduledTask, internal_queue: object):
+async def run_immediate_scheduled_task(task_schedule_instance: RQScheduledTask, internal_queue: object):
 
-	# 0. First remove the Task from the Schedule (so it doesn't get executed twice)
+	get_logger().info(f">>>>> Time To Make The Donuts! (enqueuing Redis Job '{task_schedule_instance.task_schedule_id}' for immediate execution)")
+
+	# IMPORTANT: Remove this Task from the BTU Schedule Key (so it doesn't accidentally get executed twice)
 	redis_conn = create_connection()
 	if not redis_conn:
 		get_logger().warning("Early exit from run_immediate_scheduled_task(); cannot establish a connection to Redis database.")
 		return  # If cannot connect to Redis, do not panic the thread.  Instead, return an empty Vector.
 
 	redis_result = redis_conn.zrem(RQ_KEY_SCHEDULED_TASKS, str(task_schedule_instance.to_tsik()))
-	whatis(redis_result)
 	if redis_result != 1:
 		get_logger().error(f"Unable to remove Task Schedule Instance using 'zrem'.  Response from Redis = {redis_result}")
+		return
 
-	# 1. Read the MariaDB database to construct a BTU Task Schedule struct.
-	task_schedule = BtuTaskSchedule.init_from_schedule_key(task_schedule_instance.task_schedule_id)
+	# 1. Read the SQL database to construct a BTU Task Schedule struct.
+	task_schedule = await BtuTaskSchedule.init_from_schedule_key(task_schedule_instance.task_schedule_id)
 	if not task_schedule:
-		raise IOError("Unable to read Task Schedule from MariaDB database.")
+		raise IOError(f"Unable to read a BTU Task Schedule '{task_schedule_instance.task_schedule_id}' from SQL database.")
 
 	# 2. Exit early if the Task Schedule is disabled (this should be a rare scenario, but definitely worth checking.)
-	if task_schedule.enabled:
+	if not task_schedule.enabled:
 		get_logger().warning(f"Task Schedule {task_schedule.id} is disabled in SQL database; BTU will neither execute nor re-queue.")
-		raise RuntimeError(f"Task Schedule {task_schedule.id} is disabled in SQL database; BTU will not execute or re-queue.")
+		return None
+		# raise RuntimeError(f"Task Schedule {task_schedule.id} is disabled in SQL database; BTU will not execute or re-queue.")
 
-	# 3. Create an RQ Job from the BtuTask struct.
-	rq_job = task_schedule.to_rq_job()
-	get_logger().debug(f"Created an RQJob object: {rq_job}")
-
-	# 4. Save the new Job into Redis.
-	rq_job.save_to_redis()
-
-	# 5. Enqueue that job for immediate execution.
 	try:
-		enqueue_job_immediate(rq_job.job_key_short)
+		rq_job = await task_schedule.to_rq_job()  # create a new instance of RQJobWrapper struct.
+		rq_job.write_to_redis_key()  # NOTE: This just creates the Job key in Redis; it does not actually enqueue yet.
+		enqueue_job_immediate(rq_job.job_key_short) # Enqueue that job for immediate execution.
 		get_logger().info(f"Successfully enqueued: '{rq_job.job_key_short}'")
 	except Exception as ex:
+		raise ex
 		get_logger().error(f"Error while attempting to queue job for execution: {ex}")
 
-	# 6. Recalculate the next Run Time.
+	# Finally, recalculate the next Run Time.
 	#	  Easy enough; just push the Task Schedule ID back into the -Internal- Queue!
 	#	  It will get processed automatically during the next thread cycle.
-	internal_queue.push_back(task_schedule_instance.task_schedule_id)
+	internal_queue.put(task_schedule_instance.task_schedule_id)
 
 
 def rq_get_scheduled_tasks() -> list[RQScheduledTask]:

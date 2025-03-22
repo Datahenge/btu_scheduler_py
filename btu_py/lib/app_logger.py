@@ -22,7 +22,7 @@ def build_new_logger(logger_name: str, logfile_path, logging_level: str, stream_
 
 	if stream_to_terminal:
 		logger.propagate = False
-		print("Logger will also stream to the terminal.")
+		print("Note: Logger will also stream to the terminal.")
 		handler_stream = logging.StreamHandler()
 		handler_stream.setFormatter(formatter)
 		logger.addHandler(handler_stream)  # finally, add the handler to the custom logger
