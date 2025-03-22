@@ -45,7 +45,7 @@ class TSIK():
 		"""
 		Task Schedule's next execution time, in UTC.
 		"""
-		naive_value = DateTimeType.fromtimestamp(self.next_datetime_as_unix_timestamp)
+		naive_value = DateTimeType.fromtimestamp(self.next_execution_as_unix_timestamp)
 		return temporal_lib.core.localize_datetime(naive_value, ZoneInfo("UTC"))
 
 	def __str__(self) -> str:
@@ -70,6 +70,9 @@ class RQScheduledTask():
 
 	@staticmethod
 	def from_tsik(tsik: TSIK) -> object:
+
+		if not isinstance(tsik, TSIK):
+			raise TypeError(tsik)
 
 		return RQScheduledTask(
 			task_schedule_id=tsik.task_schedule_id(),
@@ -157,7 +160,8 @@ def add_task_schedule_to_rq(task_schedule: BtuTaskSchedule):
 		rq_scheduled_task.to_tsik(),
 		rq_scheduled_task.next_datetime_unix
 	)
-	# whatis(result)
+
+	whatis(result)
 
 	match result:
 
@@ -212,7 +216,7 @@ def fetch_task_schedules_ready_for_rq(sched_before_unix_time: int) -> list:
 		return []
 
 	if len(zranges) > 0:
-		get_logger().info(f"Found {zranges.len()} Task Schedules that qualify for immediate execution.")
+		get_logger().info(f"Found {len(zranges)} Task Schedules that qualify for immediate execution.")
 
 	# The strings in the vector are a concatenation:  Task Schedule ID, pipe character, Unix Time.
 	# Need to split off the trailing Unix Time, to obtain a list of Task Schedules.
@@ -289,10 +293,12 @@ def rq_get_scheduled_tasks() -> list:
 		get_logger().debug("In lieu of a Redis Connection, returning an empty vector.")
 		return []
 
-	redis_result: [] = redis_conn.zscan(RQ_KEY_SCHEDULED_TASKS)  # list of tuples
-	number_results = redis_result.len()
-	wrapped_result = [ RQScheduledTask.from_tsik(each) for each in redis_result ]  # list of RQSchedule Task;  Map It?
-	if number_results != wrapped_result.len():
+	redis_result: tuple = redis_conn.zscan(RQ_KEY_SCHEDULED_TASKS)  # (0, [('TS-000007|1742607180', 1742607180.0), ('TS-000007|1742607360', 1742607360.0) ])
+	list_of_tsik_string = [ each[0] for each in redis_result[1] ]
+
+	number_results = len(list_of_tsik_string)
+	wrapped_result = [ RQScheduledTask.from_tsik(TSIK(each)) for each in list_of_tsik_string ]  # list of RQSchedule Task;  Map It?
+	if number_results != len(wrapped_result):
 		message_string = f"Unexpected Error: Number values in Redis: {number_results}.  Number values in VecRQScheduledTask: {wrapped_result}"
 		get_logger().error(message_string)
 		raise RuntimeError(message_string)
@@ -329,7 +335,7 @@ def rq_print_scheduled_tasks(to_stdout: bool):
 	tasks: list = rq_get_scheduled_tasks()
 	local_time_zone = btu_py.get_config_data().timezone()
 
-	print(f"There are {tasks.len()} BTU Tasks scheduled for automatic execution.")
+	print(f"There are {len(tasks)} BTU Task Schedules pending automatic execution.")
 	for result in sorted(tasks, lambda x: x.id):
 		next_datetime_local = result.next_datetime_utc.with_timezone(local_time_zone)
 		message: str = f"Task Schedule {result.task_schedule_id} is scheduled to occur later at {next_datetime_local}"
@@ -346,12 +352,12 @@ async def queue_full_refill(internal_queue: object) -> int:
 	"""
 	rows_added = 0
 	enabled_schedules =  await (get_enabled_task_schedules())
-	print(f"Found {len(enabled_schedules)} enabled Task Schedules.")
+	btu_py.get_logger().info(f"queue_full_refill() found {len(enabled_schedules)} enabled Task Schedules.")
 	for each_row in enabled_schedules:  # each_row is a dictionary with 2 keys: 'name' and 'desc_short'
 		await internal_queue.put(each_row['schedule_key'])  # add the schedule_key ('name') of a BTU Task Schedule document.
 		rows_added += 1
-
-	print(f"queue_full_refill() - Added {rows_added} rows to daemon's internal queue.")
+	if rows_added:
+		btu_py.get_logger().info(f"Filled internal queue with {rows_added} Task Schedule identifiers.")
 	return rows_added
 
 

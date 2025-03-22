@@ -1,4 +1,4 @@
-""" ftp_py_docker/config.py """
+""" btu_py/lib/config/__init__.py """
 
 # Standard library
 import copy

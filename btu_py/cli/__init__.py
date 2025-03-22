@@ -59,6 +59,9 @@ def cmd_config(command):
 	"""
 	Configuration of ftp-docker.
 	"""
+	from btu_py.lib.config import AppConfig
+	btu_py.shared_config.set(AppConfig())
+
 	match command.split():
 		case ['show']:
 			btu_py.get_config().print_config()

@@ -42,14 +42,13 @@ async def internal_queue_producer(shared_queue):
 	As the queue is filled, Thread 1 handles consuming and procesing each TSIK.
 	"""
 
-	print("Starting thread number 2: the internal queue Producer ...")
+	btu_py.get_logger().info("Initializing thread 'internal_queue_producer()' ...")
 	stopwatch = Stopwatch()
 	while True:
-		btu_py.get_logger().debug(f"Thread 2: Attempting to Auto-Refill the Internal Queue (current time is {get_datetime_string()})...")
 		elapsed_seconds = stopwatch.get_elapsed_seconds_total()  # calculate elapsed seconds since last Queue Repopulate
 		if elapsed_seconds > btu_py.get_config_data().full_refresh_internal_secs:  # If sufficient time has passed ...
-			btu_py.get_config().logger().info(f"{elapsed_seconds} seconds have elapsed.  It's time for a full-refresh of the Task Schedules in Redis!")
-			btu_py.get_config().logger().debug(f"  * Before refill, the queue contains {shared_queue.qsize()} values.")
+			btu_py.get_logger().info(f"Producer: {elapsed_seconds} seconds have elapsed.  It's time for a full-refresh of the Task Schedules in Redis!")
+			btu_py.get_logger().debug(f"  * Before refill, the queue contains {shared_queue.qsize()} values.")
 			result = await scheduler.queue_full_refill(shared_queue)
 			if result:
 				btu_py.get_logger().debug(f"  * Added {result} values to the internal FIFO queue.")
@@ -59,7 +58,7 @@ async def internal_queue_producer(shared_queue):
 			else:
 				raise RuntimeError(f"Error while repopulating the internal queue! {result}")
 
-		await asyncio.sleep(0.75)  # blocking request, yields controls to another coroutine for a while.
+		await asyncio.sleep(1)  # blocking request, yields controls to another coroutine for a while.
 
 
 async def review_next_execution_times(shared_queue):
