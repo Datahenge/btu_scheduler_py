@@ -8,8 +8,8 @@ from typing import Union
 from zoneinfo import ZoneInfo
 
 from btu_py.lib import btu_cron
-from btu_py.lib.rq import RQJobWrapper
-from btu_py.lib.sql import get_task_schedule_by_id
+from btu_py.lib.btu_rq import RQJobWrapper
+from btu_py.lib.sql import get_task_by_id, get_task_schedule_by_id
 from btu_py.lib.structs.sanchez import get_pickled_function_from_web
 from btu_py.lib.utils import whatis
 
@@ -26,8 +26,19 @@ class BtuTask():
 	max_task_duration: int # example:  600 seconds
 
 	@staticmethod
-	async def init_from_sql(task_key: str):
-		pass
+	async def init_from_task_key(task_key: str):
+		task_data: dict = await get_task_by_id(task_key)  # read from the SQL Database
+		if not task_data:
+			raise IOError(f"No SQL row returned by get_task_by_id() for primary key = '{task_key}'")
+
+		return BtuTask(
+			task_key=task_data["task_key"],
+			desc_short=task_data["desc_short"],
+			desc_long=task_data["desc_long"],
+			arguments=task_data["arguments"],
+			path_to_function=task_data["path_to_function"],
+			max_task_duration=task_data["max_task_duration"]
+		)
 
 	async def convert_to_wrapped_rq_job(self) -> RQJobWrapper:
 		"""
@@ -44,7 +55,7 @@ class BtuTask():
 @dataclass
 class BtuTaskSchedule():
 	id: str
-	task: str
+	task_key: str
 	task_description: str
 	enabled: bool
 	queue_name: str
@@ -62,7 +73,7 @@ class BtuTaskSchedule():
 
 		return BtuTaskSchedule(
 			id=schedule_data["name"],
-			task=schedule_data["task"],
+			task_key=schedule_data["task"],
 			task_description=schedule_data["task_description"],
 			enabled=schedule_data["enabled"],
 			queue_name=schedule_data["queue_name"],
@@ -80,11 +91,11 @@ class BtuTaskSchedule():
 		wrapped_job.description = self.task_description
 		wrapped_job.origin = self.queue_name
 
-		byte_result = await get_pickled_function_from_web(self.task, self.id)
-		whatis(byte_result)
+		byte_result: bytes = await get_pickled_function_from_web(self.task_key, self.id)
 
+		task = await BtuTask.init_from_task_key(self.task_key)
 		wrapped_job.data = byte_result
-		wrapped_job.timeout = self.max_task_duration
+		wrapped_job.timeout = task.max_task_duration
 		return wrapped_job
 
 	def get_next_runtimes(self, from_utc_datetime=None, number_results=1) -> list[DateTimeType]:

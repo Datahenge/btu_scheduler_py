@@ -11,12 +11,15 @@ import redis
 import rq
 
 # BTU
-from btu_py import get_config
-from btu_py.lib.utils import whatis, utc_to_rq_string
+from btu_py import get_config, get_logger
+from btu_py.lib.utils import whatis
 
 
 NoneType = type(None)
-RQ_JOB_PREFIX = "rq:job"
+RQ_JOB_PREFIX = "rq:job:my_postgres_site::"
+
+def datetime_to_rq_date_string(some_datetime):
+	return some_datetime.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 def create_connection():
@@ -75,7 +78,7 @@ class RQJobWrapper():
 			origin = "default",  # temporarily
 			result_ttl = None,
 			started_at = None,
-			status = None,
+			status = "queued",
 			timeout = 3600,  # default of 3600 seconds (1 hour)
 			worker_name = "",
 			rq_job = None
@@ -86,29 +89,33 @@ class RQJobWrapper():
 		Save the RQ struct to the Redis database, but do not enqueue.
 		"""
 		redis_conn = create_connection()
-		values: list = [
-			( "status", self.status ),
-			( "worker_name", self.worker_name ),
-			( "ended_at", self.ended_at ),
-			( "result_ttl", self.result_ttl ),
-			( "enqueued_at",  self.enqueued_at ),
-			( "last_heartbeat", self.last_heartbeat ),
-			( "origin", self.origin ),
-			( "description", self.description ),
-			( "started_at", self.started_at ),
-			( "created_at", utc_to_rq_string(self.created_at) ),
-			( "timeout", self.timeout )
-		]
+
+		# NOTE: Cannot pass NoneTypes here
+		values_dict = {
+			"status": self.status,
+			"worker_name": self.worker_name,
+			"ended_at": self.ended_at or "",
+			"result_ttl": self.result_ttl or "",
+			"enqueued_at":  self.enqueued_at or "",
+			"last_heartbeat": datetime_to_rq_date_string(self.last_heartbeat) if self.last_heartbeat else "",
+			"origin": self.origin,
+			"description": self.description,
+			"started_at": self.started_at or "",
+			"created_at": datetime_to_rq_date_string(self.created_at),
+			"timeout": self.timeout
+		}
 
 		# When using hset_multiple, the values must all be of the same Type.
 		# In the case below, an Array of Tuples, where the Tuple is (&str, &String)
-		redis_conn.hset_multiple(self.job_key, values)
+		print(f"Writing Job Key {self.job_key} ...")
+		redis_conn.hmset(self.job_key, values_dict)
 		redis_conn.hset(self.job_key, "data", self.data)
 		if self.meta:
 			redis_conn.hset(self.job_key, "meta", self.meta)
 
 	def create_and_enqueue(self):
-		raise NotImplementedError("create_and_enqueue")
+		self.create_only()
+		enqueue_job_immediate(self.job_key)
 
 
 def enqueue_job_immediate(existing_job_id: str):
@@ -116,13 +123,19 @@ def enqueue_job_immediate(existing_job_id: str):
 	Add a pre-existing RQ Job to a queue, so a worker can pick it up.
 	"""
 	redis_conn = create_connection()
-	this_job: rq.job.Job = rq.job.Job.fetch(existing_job_id, connection=redis_conn)
+
+	from rq.registry import StartedJobRegistry
+	registry = StartedJobRegistry('default', connection=redis_conn)
+	queued_job_ids = registry.get_queue().job_ids
+	print(f"queued_job_ids: {queued_job_ids}")
+
+	this_job = rq.job.Job.fetch(existing_job_id, connection=redis_conn)
 
 	# First, add the Queue name to 'rq:queues' (it could be there already)
 	queue_key: str = f"rq:queue:{this_job.origin}"
 	some_result = redis_conn.sadd("rq:queues", queue_key)
 	if not some_result:
-		print("Error during enqueue_job_immediate()")
+		get_logger().error("Error during enqueue_job_immediate()")
 		raise IOError(some_result)
 
 	# Then add the Job's ID to the queue.
@@ -131,4 +144,4 @@ def enqueue_job_immediate(existing_job_id: str):
 	whatis(push_result)
 	if not push_result:
 		raise IOError(push_result)
-	print(f"Enqueued RQ Job '{existing_job_id}' for immediate execution. Length of list after 'rpush' operation: {push_result}")
+	get_logger.info(f"Enqueued RQ Job '{existing_job_id}' for immediate execution. Length of list after 'rpush' operation: {push_result}")

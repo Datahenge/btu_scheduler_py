@@ -9,7 +9,7 @@ import pathlib
 
 import btu_py
 from btu_py import get_logger
-from btu_py.lib.utils import Stopwatch, whatis
+from btu_py.lib.utils import Stopwatch
 from btu_py.lib.structs import BtuTaskSchedule
 from btu_py.lib import scheduler
 
@@ -22,7 +22,7 @@ async def internal_queue_consumer(shared_queue):
 		if shared_queue.qsize():
 			get_logger().debug(f"IQM: Number of items in Queue = {shared_queue.qsize()}")
 			next_task_schedule_id = await shared_queue.get()  # NOTE: The coroutine will hang out here, doing nothing, until something shows up in the Queue.
-			get_logger().info(f"IQM: The next Task Schedule ID = {next_task_schedule_id}")
+			# get_logger().info(f"IQM: The next Task Schedule ID = {next_task_schedule_id}")
 			task_schedule: BtuTaskSchedule = await BtuTaskSchedule.init_from_schedule_key(next_task_schedule_id)
 			if task_schedule:
 				scheduler.add_task_schedule_to_rq(task_schedule)
@@ -68,8 +68,8 @@ async def review_next_execution_times(shared_queue):
 	   If the Next Execution Time is in the past?  Then place the RQ Job into the appropriate queue.  RQ and Workers take over from there.
 	  ----------------
 	"""
-	await asyncio.sleep(10)  # One-time delay of execution: this gives the other coroutines a chance to initialize.
-	btu_py.get_logger().info("--> Thread '3_Scheduler' has launched.  Eligible RQ Jobs will be placed into RQ Queues at the appropriate time.")
+	await asyncio.sleep(5)  # One-time delay of execution: this gives the other coroutines a chance to initialize.
+	btu_py.get_logger().info("Starting coroutine review_next_execution_times(), adding eligible RQ Jobs to RQ Queues at the appropriate time.")
 	while True:
 		btu_py.get_logger().debug("Thread 3: Attempting to add new Jobs to RQ...")
 		# This thread requires a lock on the Internal Queue, so that after a Task runs, it can be rescheduled.
@@ -87,18 +87,22 @@ async def handle_echo_client(reader, writer):
 	"""
 	get_logger().info("A client connected to the BTU Daemon Unix Socket.")
 
-	msg_bytes = await reader.readline(encoding="utf-8")	# read the message from the client
-	whatis(msg_bytes)
-	get_logger().info(f"Got: {msg_bytes.decode().strip()}")	# report the message
-	await asyncio.sleep(1)	# wait a moment
+	msg_bytes = await reader.readline()	# read the message from the client
+	decoded_bytes: str = msg_bytes.decode().strip()
+	get_logger().info(f"Received this data string: {decoded_bytes}")	# report the message
 
-	# report progress
-	get_logger().info('Echoing message...')
-	writer.write(msg_bytes)	# send the message back
-	await writer.drain()	# wait for the buffer to empty
-	writer.close()	# close the connection
-	await writer.wait_closed()
-	print('Closing connection')	# close the connection
+	get_logger().info('Attempting to echo back the same message')
+
+	try:
+		await writer.write(msg_bytes)	# send the message back
+		await writer.drain()	# wait for the buffer to empty
+
+		get_logger().debug("Closing connection.")  # Close the connection
+		writer.close()	# close the connection
+		await writer.wait_closed()
+	except* Exception as ex:
+		get_logger().error(f"Error in handle_echo_client() : {ex}")
+		raise ex
 
 
 async def unix_domain_socket_listener():
@@ -111,6 +115,8 @@ async def unix_domain_socket_listener():
 			os.unlink(socket_path)  # remove any preexisting socket files.
 		except OSError as ex:
 			print(f"Error in unix_domain_socket_listener() : {ex}")
+			raise ex
+		except Exception as ex:
 			raise ex
 
 	server = await asyncio.start_unix_server(handle_echo_client, socket_path)  # create a new server object

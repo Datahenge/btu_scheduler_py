@@ -27,9 +27,9 @@ dependencies = [
 	"croniter==6.0.0",
  	"psutil==7.0.0",
 	"psycopg~=3.2.6",
-	"redis-5.2.1",
+	"redis==5.2.1",
 	"requests==2.32.3",
- 	"rq==2.1.0",
+ 	"rq==1.15.1",  # Keeping this pinned to Frappe Framework v15 version of rq
     "schema ~= 0.7.7",
     "semantic-version ~= 2.10.0",
  	"slack_sdk~=3.31.0",

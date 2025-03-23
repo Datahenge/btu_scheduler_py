@@ -6,8 +6,9 @@ from btu_py import get_config
 
 
 async def create_connection():
-
-	# print(f"Postgres Connection String:\n{get_config().get_sql_connection_string()}")
+	"""
+	Create a connection to a Postgres database.
+	"""
 	aconn = await psycopg.AsyncConnection.connect(
 		get_config().get_sql_connection_string(),
 		row_factory=dict_row

@@ -127,8 +127,11 @@ def tz_cron_to_utc_datetimes(cron_expression_string: str,
 		cron_timezone = btu_py.get_config().timezone()
 	elif isinstance(cron_timezone, str):
 		cron_timezone = ZoneInfo(cron_timezone)
+
 	if not from_utc_datetime:
 		from_utc_datetime = DateTimeType.now(ZoneInfo('UTC'))
+	if not isinstance(from_utc_datetime, DateTimeType):
+		raise TypeError(from_utc_datetime)
 
 	this_cronstruct = CronStruct.from_string(cron_expression_string)
 

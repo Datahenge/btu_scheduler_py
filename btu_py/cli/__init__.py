@@ -16,7 +16,7 @@ import click
 # Package
 import btu_py
 from btu_py import __version__
-from btu_py.lib.utils import get_datetime_string, send_message_to_slack, whatis  # pylint: disable=unused-import
+from btu_py.lib.utils import get_datetime_string, send_message_to_slack, whatis
 
 VERBOSE_MODE = False
 logging.basicConfig(level=logging.ERROR)
@@ -88,7 +88,7 @@ def cli_run_daemon(debug):
 
 
 @entry_point.command('test')
-@click.argument('command', type=click.Choice(['redis', 'slack', 'sql', 'temp'], case_sensitive=False))
+@click.argument('command', type=click.Choice(['redis', 'slack', 'sql', 'pickler', 'frappe-ping', 'temp'], case_sensitive=False))
 def cli_test(command):
 	"""
 	Run a test.
@@ -107,22 +107,8 @@ def cli_test(command):
 			asyncio.run(test_sql())
 
 		case 'slack':
-			from slack_sdk import WebClient
-			# Test One
-			client = WebClient(ssl=ssl._create_unverified_context())  # pylint: disable=protected-access
-			api_response = client.api_test()
-			if api_response.get('ok', False):
-				print("\u2713 First test successful.")
-			else:
-				print("\u2717 First failed.")
-
-			# Test Two
-			message = f"{get_datetime_string()} : This is a test initiated by the 'btu-py' CLI application.\nNothing to see here; move along!"
-			if send_message_to_slack(btu_py.get_config(), message):
-				print("\u2713 Second test successful.  Please examine Slack to find a test message.")
-			else:
-				print("\u2717 Second test failed.")
-			return
+			from btu_py.lib.tests import test_slack
+			test_slack()
 
 		case 'temp':
 			from btu_py.lib.structs import BtuTaskSchedule
@@ -133,6 +119,14 @@ def cli_test(command):
 			asyncio.run(
 				get_enabled_tasks()
 			)
+
+		case 'frappe-ping':
+			from btu_py.lib.tests import test_frappe_ping
+			test_frappe_ping()
+
+		case 'pickler':
+			from btu_py.lib.tests import test_pickler
+			test_pickler()
 
 		case _:
 			print(f"Unhandled subcommand {type}")

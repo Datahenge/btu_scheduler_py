@@ -217,3 +217,12 @@ def utc_to_rq_string(datetime_utc: DateTimeType) -> str:
 	result = datetime_utc.isoformat()
 	print(f"utc_to_rq_string() >>> {result}")
 	return result
+
+
+def get_frappe_base_url() -> str:
+	import btu_py
+	config_data = btu_py.get_config_data()
+
+	if config_data.webserver_port == 443:
+		return f"https://{config_data.webserver_ip}"
+	return f"http://{config_data.webserver_ip}:{config_data.webserver_port}"
