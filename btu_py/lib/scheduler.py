@@ -261,13 +261,9 @@ async def run_immediate_scheduled_task(task_schedule_instance: RQScheduledTask, 
 	if not task_schedule.enabled:
 		get_logger().warning(f"Task Schedule {task_schedule.id} is disabled in SQL database; BTU will neither execute nor re-queue.")
 		return None
-		# raise RuntimeError(f"Task Schedule {task_schedule.id} is disabled in SQL database; BTU will not execute or re-queue.")
 
 	try:
 		task_schedule.enqueue_for_next_available_worker()
-		# rq_job_wrapper = await task_schedule.to_rq_job_wrapper()  # create a new instance of RQJobWrapper struct.
-		# rq_job.create_and_enqueue()
-
 		get_logger().info(f"Successfully enqueued: '{task_schedule.id}'")
 	except Exception as ex:
 		get_logger().error(f"Error while attempting to queue job for execution: {ex}")
@@ -276,7 +272,7 @@ async def run_immediate_scheduled_task(task_schedule_instance: RQScheduledTask, 
 	# Finally, recalculate the next Run Time.
 	#	  Easy enough; just push the Task Schedule ID back into the -Internal- Queue!
 	#	  It will get processed automatically during the next thread cycle.
-	internal_queue.put(task_schedule_instance.task_schedule_id)
+	await internal_queue.put(task_schedule_instance.task_schedule_id)
 
 
 def rq_get_scheduled_tasks() -> list[RQScheduledTask]:

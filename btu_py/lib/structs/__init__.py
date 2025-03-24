@@ -9,7 +9,7 @@ from typing import Union
 from zoneinfo import ZoneInfo
 
 
-from btu_py import get_config_data
+from btu_py import get_config_data, get_logger
 from btu_py.lib import btu_cron
 from btu_py.lib.btu_rq import RQJobWrapper
 from btu_py.lib.sql import get_task_by_id, get_task_schedule_by_id
@@ -133,6 +133,6 @@ class BtuTaskSchedule():
 		)
 
 		if response.status_code != 200:
-			raise IOError(f"Unexpected response code from Frappe Framework web server: {response.status_code}")
+			raise IOError(f"Unexpected response code from Frappe Framework web server: {response.json()}")
 
-		print(response.json)
+		get_logger().info(f"Response from ERP to Enqueue: Status Code = {response.status_code}, Data = {response.json()}")
