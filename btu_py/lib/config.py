@@ -47,12 +47,13 @@ def get_config_schema():
 			"rq_port": int,
 			"socket_path": And(str, len),
 			"socket_file_group_owner": And(str, len),
+
 			"webserver_ip": And(str, len),
 			"webserver_port": int,
 			"webserver_token": And(str, len),
 
+			Optional("webserver_host_header"): And(str, len),
 			Optional("slack_webhook_url"): And(str, len),
-
 		})
 	return result
 
