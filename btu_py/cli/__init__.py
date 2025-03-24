@@ -43,10 +43,10 @@ def entry_point(verbose):
 @entry_point.command('about')
 def cmd_about():
 	"""
-	About the ftp_py_docker application.
+	About the btu-py application.
 	"""
-	print(f"ftp-docker version {__version__}")
-	print("Copyright (C) 2024")
+	print(f"btu-py version {__version__}")
+	print("Copyright (C) 2025")
 	print("\nConfigured images:")
 	image_uids = [ each['key'] for each in btu_py.get_config().get_all_images() ]
 	for each_uid in image_uids:
@@ -57,7 +57,7 @@ def cmd_about():
 @click.argument('command', type=click.Choice(['show', 'edit'], case_sensitive=False))
 def cmd_config(command):
 	"""
-	Configuration of ftp-docker.
+	Configuration of btu-py CLI.
 	"""
 	from btu_py.lib.config import AppConfig
 	btu_py.shared_config.set(AppConfig())
@@ -78,22 +78,31 @@ def cmd_config(command):
 @click.option('--debug', is_flag=True, default=False, help='Throw exceptions to help debugging.')
 def cli_run_daemon(debug):
 	"""
-	Interface with Docker images.
+	Run the BTU scheduler daemon.
 	"""
 	if debug:
-		print("TODO: Add a debug mode")
+		print("TODO: Change the logger to Debug Mode.")
 
 	from btu_py.daemon import main
 	asyncio.run(main())
 
 
+test_choices = [
+	'byte-encoding', 'frappe-ping', 'redis',
+	'slack', 'sql', 'pickler', 'frappe-ping', 'test1'
+]
 @entry_point.command('test')
-@click.argument('command', type=click.Choice(['redis', 'slack', 'sql', 'pickler', 'frappe-ping', 'temp'], case_sensitive=False))
+@click.argument('command', type=click.Choice(test_choices, case_sensitive=False))
 def cli_test(command):
 	"""
 	Run a test.
 	"""
 	match command:
+
+		case 'frappe-ping':
+			from btu_py.lib.tests import test_frappe_ping
+			test_frappe_ping()
+
 		case 'redis':
 			from btu_py.lib.tests import test_redis
 			try:
@@ -110,23 +119,17 @@ def cli_test(command):
 			from btu_py.lib.tests import test_slack
 			test_slack()
 
-		case 'temp':
-			from btu_py.lib.structs import BtuTaskSchedule
-			from btu_py.lib.sql import get_enabled_tasks
-			asyncio.run(
-				BtuTaskSchedule.init_from_schedule_key('TS-000002')
-			)
-			asyncio.run(
-				get_enabled_tasks()
-			)
-
-		case 'frappe-ping':
-			from btu_py.lib.tests import test_frappe_ping
-			test_frappe_ping()
+		case 'test1':
+			from btu_py.lib.tests import test_rq_hello_world
+			test_rq_hello_world()
 
 		case 'pickler':
 			from btu_py.lib.tests import test_pickler
 			test_pickler()
+
+		case 'byte-encoding':
+			from btu_py.lib.tests import test_create_redis_job
+			asyncio.run(test_create_redis_job())
 
 		case _:
 			print(f"Unhandled subcommand {type}")
@@ -142,36 +145,27 @@ def cli_service_status():
 		"sudo",
 		"systemctl",
 		"status",
-		"ftp_docker_falcon.service"
+		"btu_scheduler.service"
 	]
 	subprocess.run(command_list, check=False, stderr=subprocess.STDOUT)
 
-	# Dramatiq Worker
+	# Frappe Workers
 	command_list = [
 		"sudo",
 		"systemctl",
 		"status",
-		"ftp_docker_worker.service"
 	]
 	subprocess.run(command_list, check=False, stderr=subprocess.STDOUT)
 
-	# RabbitMQ
-	command_list = [
-		"sudo docker container ls | grep rabbitmq"
-	]
-	subprocess.run(command_list, check=False, stderr=subprocess.STDOUT, shell=True)
-
 
 @entry_point.command('logs')
-@click.argument('command', type=click.Choice(['truncate', 'show-worker', 'show-falcon', 'show-build'], case_sensitive=False))
+@click.argument('command', type=click.Choice(['truncate', 'show'], case_sensitive=False))
 def cli_logs(command):
 	match command.split():
 
 		case ['truncate']:
 			for each_file in (
-				"/etc/ftp-docker/logs/worker.log",
-				"/etc/ftp-docker/logs/falcon.log",
-				"/etc/ftp-docker/logs/docker_build.log"
+				"/etc/btu_scheduler/logs/worker.log",
 			):
 				try:
 					print(f"DOES NOT WORK YET Truncating log file '{each_file}' ...")
@@ -180,18 +174,8 @@ def cli_logs(command):
 				except Exception as ex:
 					print(f"Error: {ex}")
 
-		case ['show-worker']:
-			with open('/etc/ftp-docker/logs/worker.log', encoding='utf-8') as file:
-				for line in (file.readlines() [-100:]):
-					print(line, end ='')
-
-		case ['show-falcon']:
-			with open('/etc/ftp-docker/logs/falcon.log', encoding='utf-8') as file:
-				for line in (file.readlines() [-100:]):
-					print(line, end ='')
-
-		case ['show-build']:
-			with open('/etc/ftp-docker/logs/docker_build.log', encoding='utf-8') as file:
+		case ['show']:
+			with open('/etc/btu_scheduler/logs/main.log', encoding='utf-8') as file:
 				for line in (file.readlines() [-100:]):
 					print(line, end ='')
 

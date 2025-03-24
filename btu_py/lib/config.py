@@ -29,6 +29,7 @@ def get_config_schema():
 			"name": And(str, len),  # BTU Scheduler Daemon
 			"environment_name": And(str, len),
 			"full_refresh_internal_secs": int,
+			"jobs_site_prefix": str,
 			"scheduler_polling_interval": int,
 			"time_zone_string": And(str, len),  # America/Los_Angeles
 			"tracing_level": And(str, len),  # INFO

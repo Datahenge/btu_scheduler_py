@@ -4,14 +4,17 @@
 
 from dataclasses import dataclass
 from datetime import datetime as DateTimeType
+import requests
 from typing import Union
 from zoneinfo import ZoneInfo
 
+
+from btu_py import get_config_data
 from btu_py.lib import btu_cron
 from btu_py.lib.btu_rq import RQJobWrapper
 from btu_py.lib.sql import get_task_by_id, get_task_schedule_by_id
 from btu_py.lib.structs.sanchez import get_pickled_function_from_web
-from btu_py.lib.utils import whatis
+from btu_py.lib.utils import whatis, get_frappe_base_url
 
 NoneType = type(None)
 
@@ -83,7 +86,7 @@ class BtuTaskSchedule():
 			cron_timezone=schedule_data["cron_timezone"],
 		)
 
-	async def to_rq_job(self):
+	async def to_rq_job_wrapper(self):
 		"""
 		Given a BTU Task Schedule, construct an instance of RQJobWrapper; does not modify Redis.
 		"""
@@ -91,10 +94,8 @@ class BtuTaskSchedule():
 		wrapped_job.description = self.task_description
 		wrapped_job.origin = self.queue_name
 
-		byte_result: bytes = await get_pickled_function_from_web(self.task_key, self.id)
-
 		task = await BtuTask.init_from_task_key(self.task_key)
-		wrapped_job.data = byte_result
+		wrapped_job.data =await get_pickled_function_from_web(self.task_key, self.id)
 		wrapped_job.timeout = task.max_task_duration
 		return wrapped_job
 
@@ -106,3 +107,32 @@ class BtuTaskSchedule():
 				from_utc_datetime,
 				number_results
 		)
+
+	def enqueue_for_next_available_worker(self):
+		"""
+		Call Frappe website to immediately enqueue a Task as an RQ Job.
+		"""
+
+		config_data = get_config_data()
+		url = f"{get_frappe_base_url()}/api/method/btu.btu_api.endpoints.enqueue_for_next_available_worker"
+		headers = {
+			"Authorization": config_data.webserver_token,
+			"Content-Type": "application/json",
+		}
+		# If Frappe is running via gunicorn, in DNS Multi-tenancy mode, then we have to pass a "Host" header.
+		if config_data.webserver_host_header:
+			headers["Host"] = config_data.webserver_host_header
+
+		response = requests.post(
+			url=url,
+			headers=headers,
+			params = {
+				"task_schedule_key": self.id
+			},
+			timeout=30
+		)
+
+		if response.status_code != 200:
+			raise IOError(f"Unexpected response code from Frappe Framework web server: {response.status_code}")
+
+		print(response.json)

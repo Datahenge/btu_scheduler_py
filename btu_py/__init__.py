@@ -10,9 +10,13 @@ __version__ = importlib.metadata.version("btu_py")  # read the version from pypr
 shared_config = contextvars.ContextVar('config')
 
 def get_config():
+	# If the context variable has not been initialized, do so now.	
+	if isinstance(shared_config.get('config'), str):
+		initialize_shared_config()
 	return shared_config.get('config')
 
 def get_config_data():
+	# If the context variable has not been initialized, do so now.
 	if isinstance(shared_config.get('config'), str):
 		initialize_shared_config()
 	return shared_config.get('config').data

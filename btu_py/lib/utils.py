@@ -1,6 +1,6 @@
-""" ftp_py_docker/utils.py """
+""" btu_py/lib/utils.py """
 
-# NOTE: Functions here should not depend on other ftp-docker Python modules.
+# NOTE: Functions here should not depend on other btu_py modules or namespaces.
 
 from datetime import datetime as DateTimeType
 import inspect
@@ -85,46 +85,6 @@ def is_port_in_use(port: int) -> bool:
 		return s.connect_ex(('localhost', port_as_integer)) == 0
 
 
-def _kill_process_and_children(proc):
-	children = proc.children(recursive=True)
-	for child in children:
-		kill_process(child)
-	kill_process(proc)
-
-
-def kill_process(proc):
-	print(f"Attempting to kill process with PID {proc.pid}")
-	proc.kill()
-
-
-def kill_processes_by_port(port):
-	killed_any = False
-
-	attributes = ['pid', 'name', 'connections']
-	attributes = None
-	for proc in psutil.process_iter(attrs=attributes):
-		for conn in proc.connections():
-			if conn.laddr.port == port:
-				try:
-					print(f"Found process with PID {proc.pid} and name '{proc.name()}'")
-
-					if proc.name().startswith("docker"):
-						print("This process is running via Docker. You must stop the container manually.")
-						continue
-
-					_kill_process_and_children(proc)
-					killed_any = True
-
-				except (PermissionError, psutil.AccessDenied) as e:
-					print(f"Unable to kill process {proc.pid}. The process might be running as another user or root. Try again with sudo")
-					print(str(e))
-
-				except Exception as e:
-					print(f"Error killing process {proc.pid}: {str(e)}")
-
-	return killed_any
-
-
 class Stopwatch:
 	"""
 	My own take on a stopwatch program.
@@ -202,7 +162,7 @@ class DictToDot(dict):
 
 def get_datetime_string():
 	"""
-	Return the current datetime in ISO 8601 format.
+	Return the current datetime in a easily readable format.
 	"""
 	return DateTimeType.now().strftime("%Y-%m-%d %H:%M:%S")
 

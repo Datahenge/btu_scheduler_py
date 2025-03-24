@@ -47,7 +47,7 @@ async def internal_queue_producer(shared_queue):
 	while True:
 		elapsed_seconds = stopwatch.get_elapsed_seconds_total()  # calculate elapsed seconds since last Queue Repopulate
 		if elapsed_seconds > btu_py.get_config_data().full_refresh_internal_secs:  # If sufficient time has passed ...
-			btu_py.get_logger().info(f"Producer: {elapsed_seconds} seconds have elapsed.  It's time for a full-refresh of the Task Schedules in Redis!")
+			btu_py.get_logger().info(f"Producer: {elapsed_seconds} seconds have elapsed.  Time for a full-write of Task Schedule Keys in Redis!")
 			result = await scheduler.queue_full_refill(shared_queue)
 			if result:
 				btu_py.get_logger().debug(f"  * Internal queue contains a total of {shared_queue.qsize()} values.")

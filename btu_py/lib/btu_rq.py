@@ -1,4 +1,6 @@
-""" btu_py/lib/rq.py """
+""" btu_py/lib/btu_rq.py """
+
+# NOTE: Deliberately naming this "btu_rq" to distinguish from the Third Party library namespace "rq"
 
 from __future__ import annotations  # Defers evalulation of type annonations; hopefully unnecessary once Python 3.14 is released.
 from dataclasses import dataclass
@@ -11,12 +13,11 @@ import redis
 import rq
 
 # BTU
-from btu_py import get_config, get_logger
+from btu_py import get_config, get_config_data, get_logger
 from btu_py.lib.utils import whatis
 
-
 NoneType = type(None)
-RQ_JOB_PREFIX = "rq:job:my_postgres_site::"
+
 
 def datetime_to_rq_date_string(some_datetime):
 	return some_datetime.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
@@ -29,12 +30,22 @@ def create_connection():
 	if not get_config().as_dictionary():
 		raise RuntimeError("Application configuration is not loaded.")
 
-	return redis.Redis(
+	return redis.StrictRedis(
 		host= get_config().as_dictionary()["rq_host"],
 		port= get_config().as_dictionary()["rq_port"],
 		decode_responses=True
 	)
 
+def create_raw_connection():
+	if not get_config().as_dictionary():
+		raise RuntimeError("Application configuration is not loaded.")
+
+	return redis.StrictRedis(
+		host= get_config().as_dictionary()["rq_host"],
+		port= get_config().as_dictionary()["rq_port"],
+		decode_responses=False,
+		encoding=None
+	)
 
 @dataclass
 class RQJobWrapper():
@@ -43,6 +54,7 @@ class RQJobWrapper():
 	"""
 	job_key: str
 	job_key_short: str
+	fully_qualified_key: str  # includes the prefix rq::job
 	created_at: DateTimeType
 	data: bytes
 	description: str
@@ -57,15 +69,16 @@ class RQJobWrapper():
 	status: Union[NoneType, str]  # not initially populated
 	timeout: int
 	worker_name: str
-	rq_job: rq.Job
+	rq_job_object: rq.Job
 
 	@staticmethod
 	def new_with_defaults() -> RQJobWrapper:
 
-		# example: 11f83e81-83ea-4df2-aa7e-cd12d8dec779
-		uuid_string: str = uuid.uuid4() # .to_hyphenated().to_string();
+		uuid_string: str = uuid.uuid4()  # example: 11f83e81-83ea-4df2-aa7e-cd12d8dec779
+		new_job_key = f"{get_config_data().jobs_site_prefix}|{uuid_string}"
 		return RQJobWrapper (
-			job_key = f"{RQ_JOB_PREFIX}:{uuid_string}",
+			job_key = new_job_key,  # erp.farmtopeople.com|11f83e81-83ea-4df2-aa7e-cd12d8dec779
+			fully_qualified_key = f"rq:job:{new_job_key}",
 			job_key_short = uuid_string,
 			created_at = DateTimeType.now(ZoneInfo("UTC")),
 			description = "",
@@ -73,18 +86,18 @@ class RQJobWrapper():
 			ended_at = None,
 			enqueued_at = None,  # not initially populated
 			exc_info = None,
-			last_heartbeat = DateTimeType.now(ZoneInfo("UTC")),  # to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+			last_heartbeat = DateTimeType.now(ZoneInfo("UTC")),
 			meta = None,
 			origin = "default",  # temporarily
 			result_ttl = None,
 			started_at = None,
-			status = "queued",
+			status = "queued",  # techically not enqueued until later, but there is no other initial Status to choose from.
 			timeout = 3600,  # default of 3600 seconds (1 hour)
 			worker_name = "",
-			rq_job = None
+			rq_job_object = None
 		)
 
-	def create_only(self):
+	def DEL_create_only(self):
 		"""
 		Save the RQ struct to the Redis database, but do not enqueue.
 		"""
@@ -107,18 +120,17 @@ class RQJobWrapper():
 
 		# When using hset_multiple, the values must all be of the same Type.
 		# In the case below, an Array of Tuples, where the Tuple is (&str, &String)
-		print(f"Writing Job Key {self.job_key} ...")
-		redis_conn.hmset(self.job_key, values_dict)
-		redis_conn.hset(self.job_key, "data", self.data)
+		print(f"Adding data for Job {self.job_key} to Redis database ...")
+		redis_conn.hmset(self.fully_qualified_key, values_dict)
+		create_connection(decode_responses=False).hset(self.fully_qualified_key, "data", self.data)
 		if self.meta:
-			redis_conn.hset(self.job_key, "meta", self.meta)
+			redis_conn.hset(self.self.fully_qualified_key, "meta", self.meta)
 
-	def create_and_enqueue(self):
-		self.create_only()
-		enqueue_job_immediate(self.job_key)
+	def DEL_create_and_enqueue(self):
+		pass
 
 
-def enqueue_job_immediate(existing_job_id: str):
+def DEL_enqueue_job_immediate(existing_job_id: str):
 	"""
 	Add a pre-existing RQ Job to a queue, so a worker can pick it up.
 	"""
