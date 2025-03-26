@@ -246,28 +246,34 @@ async def run_immediate_scheduled_task(task_schedule_instance: RQScheduledTask, 
 		get_logger().error("Early exit from run_immediate_scheduled_task(); cannot establish a connection to Redis database.")
 		return  # If cannot connect to Redis, do not panic the thread.  Instead, return an empty Vector.
 
-	# IMPORTANT: Remove this Task from the BTU Schedule Key (so it doesn't accidentally get executed twice)
-	redis_result = redis_conn.zrem(RQ_KEY_SCHEDULED_TASKS, str(task_schedule_instance.to_tsik()))
-	if redis_result != 1:
-		get_logger().error(f"Unable to remove Task Schedule Instance using 'zrem'.  Response from Redis = {redis_result}")
+	# 1. Read the SQL database to construct a BTU Task Schedule struct.
+	try:
+		task_schedule = await BtuTaskSchedule.init_from_schedule_key(task_schedule_instance.task_schedule_id)
+	except Exception as ex:
+		get_logger().error(f"Unable to read Task Schedule from the SQL database. Error = {ex}")
 		return
 
-	# 1. Read the SQL database to construct a BTU Task Schedule struct.
-	task_schedule = await BtuTaskSchedule.init_from_schedule_key(task_schedule_instance.task_schedule_id)
 	if not task_schedule:
-		raise IOError(f"Unable to read a BTU Task Schedule '{task_schedule_instance.task_schedule_id}' from SQL database.")
+		get_logger().error(f"Unable to read a BTU Task Schedule '{task_schedule_instance.task_schedule_id}' from SQL database.")
+		return		
 
 	# 2. Exit early if the Task Schedule is disabled (this should be a rare scenario, but definitely worth checking.)
 	if not task_schedule.enabled:
 		get_logger().warning(f"Task Schedule {task_schedule.id} is disabled in SQL database; BTU will neither execute nor re-queue.")
-		return None
+		return
 
 	try:
 		task_schedule.enqueue_for_next_available_worker()
 		get_logger().info(f"Successfully enqueued: '{task_schedule.id}'")
 	except Exception as ex:
 		get_logger().error(f"Error while attempting to queue job for execution: {ex}")
-		raise ex
+		return
+
+	# IMPORTANT: Remove this Task from the BTU Schedule Key (so it doesn't accidentally get executed twice)
+	redis_result = redis_conn.zrem(RQ_KEY_SCHEDULED_TASKS, str(task_schedule_instance.to_tsik()))
+	if redis_result != 1:
+		get_logger().error(f"Unable to remove Task Schedule Instance using 'zrem'.  Response from Redis = {redis_result}")
+		return
 
 	# Finally, recalculate the next Run Time.
 	#	  Easy enough; just push the Task Schedule ID back into the -Internal- Queue!

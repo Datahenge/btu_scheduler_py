@@ -47,10 +47,7 @@ def cmd_about():
 	"""
 	print(f"btu-py version {__version__}")
 	print("Copyright (C) 2025")
-	print("\nConfigured images:")
-	image_uids = [ each['key'] for each in btu_py.get_config().get_all_images() ]
-	for each_uid in image_uids:
-		print(f"	{each_uid}")
+	print("A Python-based alternative to the original BTU Scheduler.")
 
 
 @entry_point.command('config')
@@ -87,10 +84,10 @@ def cli_run_daemon(debug):
 	asyncio.run(main())
 
 
-test_choices = [
+test_choices: set = {
 	'byte-encoding', 'frappe-ping', 'redis',
-	'slack', 'sql', 'pickler', 'frappe-ping', 'test1'
-]
+	'slack', 'sql', 'pickler', 'test1'
+}
 @entry_point.command('test')
 @click.argument('command', type=click.Choice(test_choices, case_sensitive=False))
 def cli_test(command):
