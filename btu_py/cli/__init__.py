@@ -2,6 +2,7 @@
 
 # Standard Library
 import asyncio
+from getpass import getuser
 import json
 import logging
 import os
@@ -183,7 +184,7 @@ def cli_logs(command):
 @entry_point.command('prepare')
 def cli_prepare():
 
-	linux_user =  os.getlogin()
+	linux_user =  getuser()  # NOTE: Do NOT substitute with os.getlogin().  This does not always work successfully.
 	socket_parent = pathlib.Path("/run/btu_daemon")
 
 	print("Warning: You may need to elevate to root, so it can alter permissions for the Unix Domain Socket file.\n")
@@ -196,7 +197,7 @@ def cli_prepare():
 		print("\u2713 Path exists.")
 
 	print(f"Granting Linux user {linux_user} full permissions to Socket file's parent directory.")
-	subprocess.run(['sudo', 'chown', 'sysop:sysop', '/run/btu_daemon'], capture_output=True, text=True, check=True)
+	subprocess.run(['sudo', 'chown', f"{linux_user}:{linux_user}", '/run/btu_daemon'], capture_output=True, text=True, check=True)
 
 	result = subprocess.run(['ls', '-la', socket_parent.name], capture_output=True, text=True, check=True)
 	print(result.stdout)
