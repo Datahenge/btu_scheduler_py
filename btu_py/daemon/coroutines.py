@@ -2,7 +2,6 @@
 
 # pylint: disable=logging-fstring-interpolation
 
-
 import asyncio
 import os
 import pathlib
@@ -109,8 +108,11 @@ async def unix_domain_socket_listener():
 	"""
 	A simple Unix Domain Socket listener to process user requests.
 	"""
-	socket_path = btu_py.get_config_data().socket_path
-	if pathlib.Path(socket_path).exists():
+	socket_path = pathlib.Path(btu_py.get_config_data().socket_path)
+	if not socket_path.parent.exists():
+		raise OSError(f"The parent directory for the socket file ({socket_path.parent}) does not exist.")
+
+	if socket_path.exists():
 		try:
 			os.unlink(socket_path)  # remove any preexisting socket files.
 		except OSError as ex:
@@ -118,7 +120,7 @@ async def unix_domain_socket_listener():
 			raise ex
 		except Exception as ex:
 			raise ex
-
+	
 	server = await asyncio.start_unix_server(handle_echo_client, socket_path)  # create a new server object
 	async with server:
 		# report message
