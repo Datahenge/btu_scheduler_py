@@ -18,11 +18,11 @@ No longer mainteained by the original authors.  It's now part of Pallets (https:
   pip install -e .
   ```
 * Create a new directory in Linux to hold the BTU scheduler files and folders.
-    * sudo mkdir  /etc/btu_scheduler/
-* sudo chown youruser: /etc/btu_scheduler
+    * `sudo mkdir  /etc/btu_scheduler`
+* Take ownership of this directory: `sudo chown youruser: /etc/btu_scheduler`
 * Create a default configuration file:
-    * sudo micro /etc/btu_scheduler/btu_scheduler.toml
-    * ```
+    * `nano /etc/btu_scheduler/btu_scheduler.toml`
+```
 name = "BTU Scheduler Daemon"
 environment_name = "PROD"
 full_refresh_internal_secs = 30
@@ -55,4 +55,10 @@ webserver_ip = "127.0.0.1"
 webserver_port = 8000
 webserver_host_header = "erp.yourcorp.com"
 webserver_token = "token 12345:67890"
+```
+
+
+### Running the Daemon
+```bash
+btu-py run-daemon
 ```
