@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import pathlib
+import socket
 import ssl
 import subprocess
 import sys
@@ -72,6 +73,18 @@ def cmd_config(command):
 			print(f"Subcommand '{command}' not recognized.")
 
 
+@entry_point.command('clear-scheduled-tasks')
+def cli_clear_scheduled_tasks():
+	"""
+	Clear all scheduled tasks from the Redis database.
+	"""
+	from btu_py.lib.scheduler import clear_all_scheduled_tasks
+	if clear_all_scheduled_tasks():
+		print("All scheduled tasks cleared from Redis database.")
+	else:
+		print("Error: Unable to clear scheduled tasks from Redis database.")
+
+
 @entry_point.command('run-daemon')
 @click.option('--debug', is_flag=True, default=False, help='Throw exceptions to help debugging.')
 def cli_run_daemon(debug):
@@ -86,8 +99,8 @@ def cli_run_daemon(debug):
 
 
 test_choices: set = {
-	'byte-encoding', 'frappe-ping', 'redis',
-	'slack', 'sql', 'pickler', 'test1'
+	'byte-encoding', 'frappe-ping', 'pickler', 'redis',
+	'slack', 'sql', 'test1', 'unix-socket', 'unix-socket-async', 'unix-socket-sync'
 }
 @entry_point.command('test')
 @click.argument('command', type=click.Choice(test_choices, case_sensitive=False))
@@ -97,9 +110,17 @@ def cli_test(command):
 	"""
 	match command:
 
+		case 'byte-encoding':
+			from btu_py.lib.tests import test_create_redis_job
+			asyncio.run(test_create_redis_job())
+
 		case 'frappe-ping':
 			from btu_py.lib.tests import test_frappe_ping
 			test_frappe_ping()
+
+		case 'pickler':
+			from btu_py.lib.tests import test_pickler
+			test_pickler()
 
 		case 'redis':
 			from btu_py.lib.tests import test_redis
@@ -109,25 +130,77 @@ def cli_test(command):
 			except Exception as ex:
 				print(f"Error: {ex}")
 
-		case 'sql':
-			from btu_py.lib.tests import test_sql
-			asyncio.run(test_sql())
-
 		case 'slack':
 			from btu_py.lib.tests import test_slack
 			test_slack()
+
+		case 'sql':
+			from btu_py.lib.tests import test_sql
+			asyncio.run(test_sql(quiet=False))
 
 		case 'test1':
 			from btu_py.lib.tests import test_rq_hello_world
 			test_rq_hello_world()
 
-		case 'pickler':
-			from btu_py.lib.tests import test_pickler
-			test_pickler()
+		case 'unix-socket-async':
+			async def send_to_unix_socket():
+				"""Send a message to the Unix socket listener and print the response."""
+				from btu_py.lib.config import AppConfig
+				btu_py.shared_config.set(AppConfig())
+				
+				socket_path = pathlib.Path(btu_py.get_config_data().socket_path)
+				if not socket_path.exists():
+					print(f"Error: Unix socket file does not exist at '{socket_path}'")
+					print("Make sure the daemon is running with 'btu run-daemon'")
+					return
+				
+				try:
+					reader, writer = await asyncio.open_unix_connection(str(socket_path))
+					message = "Hello Mars\n"
+					writer.write(message.encode())
+					await writer.drain()
+					
+					response = await reader.readline()
+					decoded_response = response.decode().strip()
+					print(f"Sent: {message.strip()}")
+					print(f"Received: {decoded_response}")
+					
+					writer.close()
+					await writer.wait_closed()
+				except Exception as ex:
+					print(f"Error connecting to Unix socket: {ex}")
+			
+			asyncio.run(send_to_unix_socket())
 
-		case 'byte-encoding':
-			from btu_py.lib.tests import test_create_redis_job
-			asyncio.run(test_create_redis_job())
+		case 'unix-socket-sync':
+			# Send a message to the Unix socket listener synchronously and print the response.
+			from btu_py.lib.config import AppConfig
+			btu_py.shared_config.set(AppConfig())
+			
+			socket_path = pathlib.Path(btu_py.get_config_data().socket_path)
+			if not socket_path.exists():
+				print(f"Error: Unix socket file does not exist at '{socket_path}'")
+				print("Make sure the daemon is running with 'btu run-daemon'")
+				return
+			
+			sock = None
+			try:
+				sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+				sock.connect(str(socket_path))
+				
+				message = "Hello Mars\n"
+				sock.sendall(message.encode())
+				
+				response = sock.recv(1024)
+				decoded_response = response.decode().strip()
+				print(f"Sent: {message.strip()}")
+				print(f"Received: {decoded_response}")
+				
+			except Exception as ex:
+				print(f"Error connecting to Unix socket: {ex}")
+			finally:
+				if sock:
+					sock.close()
 
 		case _:
 			print(f"Unhandled subcommand {type}")

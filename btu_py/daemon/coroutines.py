@@ -5,6 +5,7 @@
 import asyncio
 import os
 import pathlib
+import socket
 
 import btu_py
 from btu_py import get_logger
@@ -13,19 +14,25 @@ from btu_py.lib.structs import BtuTaskSchedule
 from btu_py.lib import scheduler
 
 
+def get_tcp_socket_port() -> int:
+	return btu_py.get_config_data().get('tcp_socket_port', None)
+
+
 async def internal_queue_consumer(shared_queue):
 	"""
 	Reads TSIKs from the internal couroutine Queue, and adds them to Python RQ.
 	"""
 	while True:
 		if shared_queue.qsize():
-			get_logger().debug(f"IQM: Number of items in Queue = {shared_queue.qsize()}")
+			# get_logger().debug(f"IQM: Number of items in Queue = {shared_queue.qsize()}")
 			next_task_schedule_id = await shared_queue.get()  # NOTE: The coroutine will hang out here, doing nothing, until something shows up in the Queue.
 			# get_logger().info(f"IQM: The next Task Schedule ID = {next_task_schedule_id}")
 			task_schedule: BtuTaskSchedule = await BtuTaskSchedule.init_from_schedule_key(next_task_schedule_id)
 			if task_schedule:
 				scheduler.add_task_schedule_to_rq(task_schedule)
-			get_logger().debug(f"IQM: Added task schedule to Redis Key 'btu_scheduler:task_execution_times'.  Size of internal queue is now {shared_queue.qsize()}")
+				get_logger().debug(f"IQM: Added task schedule to Redis Key 'btu_scheduler:task_execution_times'.  Size of internal queue is now {shared_queue.qsize()}")
+			else:
+				get_logger().error(f"IQM: Unable to construct a BtuTaskSchedule object from Task Schedule ID = {next_task_schedule_id}")
 
 		await asyncio.sleep(1)  # blocking request for just a moment
 
@@ -46,7 +53,7 @@ async def internal_queue_producer(shared_queue):
 	while True:
 		elapsed_seconds = stopwatch.get_elapsed_seconds_total()  # calculate elapsed seconds since last Queue Repopulate
 		if elapsed_seconds > btu_py.get_config_data().full_refresh_internal_secs:  # If sufficient time has passed ...
-			btu_py.get_logger().info(f"Producer: {elapsed_seconds} seconds have elapsed.  Time for a full-write of Task Schedule Keys in Redis!")
+			btu_py.get_logger().debug(f"Producer: {elapsed_seconds} seconds have elapsed.  Time for a full-write of Task Schedule Keys in Redis!")
 			result = await scheduler.queue_full_refill(shared_queue)
 			if result:
 				btu_py.get_logger().debug(f"  * Internal queue contains a total of {shared_queue.qsize()} values.")
@@ -84,24 +91,50 @@ async def handle_echo_client(reader, writer):
 	"""
 	Unix Socket server handler: echos client's request back to them.
 	"""
-	get_logger().info("A client connected to the BTU Daemon Unix Socket.")
-
-	msg_bytes = await reader.readline()	# read the message from the client
-	decoded_bytes: str = msg_bytes.decode().strip()
-	get_logger().info(f"Received this data string: {decoded_bytes}")	# report the message
-
-	get_logger().info('Attempting to echo back the same message')
+	get_logger().info("Unix Socket: New client connection; applying handler 'handle_echo_client'")
 
 	try:
-		await writer.write(msg_bytes)	# send the message back
-		await writer.drain()	# wait for the buffer to empty
+		msg_bytes = await reader.readline()	# read the message from the client
+		if not msg_bytes:
+			get_logger().info("Unix Socket: Client closed connection before sending data.")
+			return
+		
+		decoded_bytes: str = msg_bytes.decode().strip()
+		
+		get_logger().debug(f"Unix Socket: Datatype of decoded_bytes: {type(decoded_bytes)}")	# report the message
+		get_logger().info(f"Unix Socket: Received this data string: '{decoded_bytes}'")	# report the message
 
-		get_logger().debug("Closing connection.")  # Close the connection
-		writer.close()	# close the connection
-		await writer.wait_closed()
-	except* Exception as ex:
-		get_logger().error(f"Error in handle_echo_client() : {ex}")
-		raise ex
+		try:
+			writer.write(msg_bytes)	# send the message back (this is a synchronous, blocking call)
+			await writer.drain()	# wait for the buffer to empty
+
+			get_logger().info("Unix Socket: Successfully echoed the message back to the client.  Closing connection.")  # Close the connection
+		except (ConnectionResetError, ConnectionError, BrokenPipeError, OSError) as conn_ex:
+			# Client closed connection before we could send response - this is normal, not an error
+			get_logger().debug(f"Unix Socket: Client closed connection during response: {conn_ex}")
+		except Exception as ex:
+			get_logger().error(f"Unix Socket: Error sending response to client: {ex}")
+		finally:
+			# Always try to close the writer, even if there was an error
+			try:
+				writer.close()
+				await writer.wait_closed()
+			except Exception as close_ex:
+				get_logger().debug(f"Unix Socket: Error closing writer (connection may already be closed): {close_ex}")
+	except (ConnectionResetError, ConnectionError, BrokenPipeError, OSError) as conn_ex:
+		# Client closed connection during read - this is normal, not an error
+		get_logger().debug(f"Unix Socket: Client closed connection during read: {conn_ex}")
+		try:
+			writer.close()
+		except Exception:
+			pass  # Connection already closed
+	except Exception as ex:
+		get_logger().error(f"Unix Socket: Error in handle_echo_client() : {ex}")
+		# Don't re-raise - handle gracefully to prevent "Task exception was never retrieved" errors
+		try:
+			writer.close()
+		except Exception:
+			pass  # Connection may already be closed
 
 
 async def unix_domain_socket_listener():
@@ -131,3 +164,34 @@ async def unix_domain_socket_listener():
 	# connection.close()
 	# remove the socket file
 	# os.unlink(socket_path)
+
+
+async def handle_tcp_echo(reader, writer):
+    data = await reader.read(100)
+    message = data.decode('utf-8')  # Explicitly specify UTF-8 encoding
+    addr = writer.get_extra_info('peername')
+
+    print(f"Received {data} from {addr}")
+
+    response = 'Hello, Mars'
+    writer.write(response.encode('utf-8'))  # Explicitly set UTF-8 encoding for the response
+    await writer.drain()
+
+    writer.close()
+    await writer.wait_closed()
+
+
+async def tcp_socket_listener():
+
+	port_number = get_tcp_socket_port()
+	try:
+		server = await asyncio.start_server(handle_tcp_echo, '0.0.0.0', port_number)
+		addr = server.sockets[0].getsockname()
+		async with server:
+			get_logger().info(f"Starting TCP listener on port number {port_number} ...")
+			await server.serve_forever()
+	except OSError as ex:
+		if "Address already in use" in str(ex):
+			print(f"Port {port_number} is already in use. Please choose a different port.")
+		else:
+			raise ex

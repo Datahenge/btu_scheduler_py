@@ -132,7 +132,8 @@ class BtuTaskSchedule():
 			timeout=30
 		)
 
-		if response.status_code != 200:
+		get_logger().debug(f"Response from Frappe to Enqueue: Status Code = {response.status_code}, Data = {response.json()}")
+		if response.status_code == 200:
+			get_logger().info(f"Successfully enqueued Task Schedule: '{self.id}'")
+		else:
 			raise IOError(f"Unexpected response code from Frappe Framework web server: {response.json()}")
-
-		get_logger().info(f"Response from ERP to Enqueue: Status Code = {response.status_code}, Data = {response.json()}")

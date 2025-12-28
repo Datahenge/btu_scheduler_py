@@ -264,7 +264,6 @@ async def run_immediate_scheduled_task(task_schedule_instance: RQScheduledTask, 
 
 	try:
 		task_schedule.enqueue_for_next_available_worker()
-		get_logger().info(f"Successfully enqueued: '{task_schedule.id}'")
 	except Exception as ex:
 		get_logger().error(f"Error while attempting to queue job for execution: {ex}")
 		return
@@ -334,15 +333,26 @@ def rq_print_scheduled_tasks(to_stdout: bool):
 			get_logger().info(message)
 
 
+def clear_all_scheduled_tasks() -> bool:	
+	"""
+	Clear all scheduled tasks from the Redis database.
+	"""
+	redis_conn = create_connection()
+	if not redis_conn:
+		get_logger().error("clear_all_scheduled_tasks(): Cannot establish connection to Redis database.")
+		return False
+	redis_conn.zremrangebyrank(RQ_KEY_SCHEDULED_TASKS, 0, -1)
+	return True
+
 
 async def queue_full_refill(internal_queue: object) -> int:
 	"""
 	Queries the Frappe database, adding every active Task Schedule to BTU internal queue.
 	"""
-	btu_py.get_logger().debug(f"  * before refill, the queue contains {internal_queue.qsize()} values.")
+	# btu_py.get_logger().debug(f"  * before refill, the queue contains {internal_queue.qsize()} values.")
 	rows_added = 0
 	enabled_schedules =  await (get_enabled_task_schedules())
-	btu_py.get_logger().debug(f"  * queue_full_refill() found {len(enabled_schedules)} enabled Task Schedules.")
+	# btu_py.get_logger().debug(f"  * queue_full_refill() found {len(enabled_schedules)} enabled Task Schedules.")
 	for each_row in enabled_schedules:  # each_row is a dictionary with 2 keys: 'name' and 'desc_short'
 		await internal_queue.put(each_row['schedule_key'])  # add the schedule_key ('name') of a BTU Task Schedule document.
 		rows_added += 1

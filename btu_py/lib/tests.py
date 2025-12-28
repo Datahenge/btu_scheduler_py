@@ -12,7 +12,7 @@ def test_redis():
 	return conn.ping()
 
 
-async def test_sql():
+async def test_sql(quiet=False):
 	"""
 	Test the connection to the Frappe database.
 	"""
@@ -23,7 +23,8 @@ async def test_sql():
 	async with aconn.cursor() as acur:
 		acursor: psycopg.AsyncCursor = await acur.execute(query_string)
 		sql_row: dict = await acursor.fetchone()
-		print(f"Number of records in DocType table = {sql_row['record_count']}")
+		if not quiet:
+			print(f"Number of records in DocType table = {sql_row['record_count']}")
 
 
 def test_slack():

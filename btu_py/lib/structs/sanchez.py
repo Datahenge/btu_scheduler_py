@@ -15,7 +15,7 @@ NoneType = type(None)
 
 async def get_pickled_function_from_web(task_id: str, task_schedule_id: Union[str, NoneType]) -> bytes:
 	"""
-	Call ERPNext REST API and acquire pickled Python function as bytes.
+	Call Frappe REST API and acquire pickled Python function as bytes.
 	"""
 	config_data = get_config_data()
 	url = f"{get_frappe_base_url()}/api/method/btu.btu_api.endpoints.get_pickled_task"

@@ -35,6 +35,7 @@ def get_config_schema():
 			"tracing_level": And(str, len),  # INFO
 			"startup_without_database_connections": bool,
 			Optional("disable_unix_socket"): Or(int, bool),
+			Optional("disable_tcp_socket"): Or(int, bool),
 
 			"sql_type": And(str,len, lambda x: x in ('mariadb', 'postgres')),
 			"sql_host": And(str,len),
@@ -46,6 +47,8 @@ def get_config_schema():
 
 			"rq_host": And(str, len),
 			"rq_port": int,
+
+			"tcp_socket_port": And(int),
 			"socket_path": And(str, len),
 			"socket_file_group_owner": And(str, len),
 

@@ -42,3 +42,4 @@ development = ["pylint", "twine"]
 
 [project.scripts]
 btu-py = "btu_py.cli:entry_point"
+btu = "btu_py.cli:entry_point"
