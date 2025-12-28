@@ -1,27 +1,20 @@
-Python-based alternative to the original 2021 https://github.com/Datahenge/btu_scheduler_daemon
-
-
-
-### Regarding Croniter
-https://pypi.org/project/croniter/
-
-No longer mainteained by the original authors.  It's now part of Pallets (https://palletsprojects.com)
-* https://github.com/pallets-eco/croniter
-* https://github.com/pallets-eco/croniter/issues/144
-
+# BTU Scheduler
+This is the Python-based alternative to the original 2021 scheduler: https://github.com/Datahenge/btu_scheduler_daemon
 
 ### Installing
-* Create a new Python virtual environment, and activate it.
-* Download the btu-py app:  `git clone https://github.com/Datahenge/btu_scheduler_py.git`
-* Install with pip:
+- Create a new Python virtual environment, and activate it.
+- Download the btu-py app:  `git clone https://github.com/Datahenge/btu_scheduler_py.git`
+- Install with pip:
     ```
   pip install -e .
   ```
-* Create a new directory in Linux to hold the BTU scheduler files and folders.
+- Create a new directory in Linux to hold the BTU scheduler files and folders.
     * `sudo mkdir  /etc/btu_scheduler`
-* Take ownership of this directory: `sudo chown youruser: /etc/btu_scheduler`
-* Create a default configuration file:
+- Take ownership of this directory: `sudo chown youruser: /etc/btu_scheduler`
+- Create a default configuration file:
     * `nano /etc/btu_scheduler/btu_scheduler.toml`
+
+Here are some samples contents
 ```
 name = "BTU Scheduler Daemon"
 environment_name = "PROD"
@@ -58,7 +51,19 @@ webserver_token = "token 12345:67890"
 ```
 
 
+### Running the CLI
+```bash
+btu-py
+```
+
 ### Running the Daemon
 ```bash
 btu-py run-daemon
 ```
+
+### Regarding Croniter
+https://pypi.org/project/croniter/
+
+No longer maintained by the original authors.  It's now part of Pallets (https://palletsprojects.com)
+* https://github.com/pallets-eco/croniter
+* https://github.com/pallets-eco/croniter/issues/144
