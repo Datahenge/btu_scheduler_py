@@ -18,7 +18,7 @@ import click
 # Package
 import btu_py
 from btu_py import __version__
-from btu_py.lib.utils import get_datetime_string, send_message_to_slack, whatis
+from btu_py.lib.utils import get_datetime_string, whatis
 
 VERBOSE_MODE = False
 logging.basicConfig(level=logging.ERROR)
@@ -98,10 +98,10 @@ def cli_run_daemon(debug):
 	asyncio.run(main())
 
 
-test_choices: set = {
-	'byte-encoding', 'frappe-ping', 'pickler', 'redis',
-	'slack', 'sql', 'test1', 'unix-socket', 'unix-socket-async', 'unix-socket-sync'
-}
+test_choices: list = [
+	'frappe-ping', 'pickler', 'redis',
+	'slack', 'sql', 'tcp-socket', 'test-rq-hello-world', 'unix-socket-async', 'unix-socket-sync'
+]
 @entry_point.command('test')
 @click.argument('command', type=click.Choice(test_choices, case_sensitive=False))
 def cli_test(command):
@@ -109,10 +109,6 @@ def cli_test(command):
 	Run a test.
 	"""
 	match command:
-
-		case 'byte-encoding':
-			from btu_py.lib.tests import test_create_redis_job
-			asyncio.run(test_create_redis_job())
 
 		case 'frappe-ping':
 			from btu_py.lib.tests import test_frappe_ping
@@ -138,39 +134,13 @@ def cli_test(command):
 			from btu_py.lib.tests import test_sql
 			asyncio.run(test_sql(quiet=False))
 
-		case 'test1':
+		case 'test-rq-hello-world':
 			from btu_py.lib.tests import test_rq_hello_world
 			test_rq_hello_world()
 
 		case 'unix-socket-async':
-			async def send_to_unix_socket():
-				"""Send a message to the Unix socket listener and print the response."""
-				from btu_py.lib.config import AppConfig
-				btu_py.shared_config.set(AppConfig())
-				
-				socket_path = pathlib.Path(btu_py.get_config_data().socket_path)
-				if not socket_path.exists():
-					print(f"Error: Unix socket file does not exist at '{socket_path}'")
-					print("Make sure the daemon is running with 'btu run-daemon'")
-					return
-				
-				try:
-					reader, writer = await asyncio.open_unix_connection(str(socket_path))
-					message = "Hello Mars\n"
-					writer.write(message.encode())
-					await writer.drain()
-					
-					response = await reader.readline()
-					decoded_response = response.decode().strip()
-					print(f"Sent: {message.strip()}")
-					print(f"Received: {decoded_response}")
-					
-					writer.close()
-					await writer.wait_closed()
-				except Exception as ex:
-					print(f"Error connecting to Unix socket: {ex}")
-			
-			asyncio.run(send_to_unix_socket())
+			from btu_py.lib.tests import test_unix_socket_async
+			asyncio.run(test_unix_socket_async())
 
 		case 'unix-socket-sync':
 			# Send a message to the Unix socket listener synchronously and print the response.
@@ -203,7 +173,8 @@ def cli_test(command):
 					sock.close()
 
 		case _:
-			print(f"Unhandled subcommand {type}")
+			test_choices_string = '\n    '.join(test_choices)
+			print(f"Unhandled subcommand '{command}'.  Please choose one of:\n    {test_choices_string}\n")
 
 
 @entry_point.command('service-status')
@@ -252,25 +223,3 @@ def cli_logs(command):
 
 		case _:
 			print(f"Subcommand '{command}' not recognized.")
-
-
-@entry_point.command('prepare')
-def cli_prepare():
-
-	linux_user =  getuser()  # NOTE: Do NOT substitute with os.getlogin().  This does not always work successfully.
-	socket_parent = pathlib.Path("/run/btu_daemon")
-
-	print("Warning: You may need to elevate to root, so it can alter permissions for the Unix Domain Socket file.\n")
-
-	if not socket_parent.exists():
-		print(f"Creating new directory: {socket_parent}")
-		subprocess.run(['sudo', 'mkdir', socket_parent.name], capture_output=True, text=True, check=True)
-
-	if socket_parent.exists():
-		print("\u2713 Path exists.")
-
-	print(f"Granting Linux user {linux_user} full permissions to Socket file's parent directory.")
-	subprocess.run(['sudo', 'chown', f"{linux_user}:{linux_user}", '/run/btu_daemon'], capture_output=True, text=True, check=True)
-
-	result = subprocess.run(['ls', '-la', socket_parent.name], capture_output=True, text=True, check=True)
-	print(result.stdout)

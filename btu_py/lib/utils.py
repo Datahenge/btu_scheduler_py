@@ -69,6 +69,8 @@ def send_message_to_slack(app_config, message_string: str) -> bool:
 	"""
 	Send a message string to Slack using Webhooks API.
 	"""
+	if 'slack_webhook_url' not in app_config.as_dictionary():
+		raise RuntimeError("Cannot send message to Slack: Configuration file is missing an entry 'slack_webhook_url'")
 	webhook_url = app_config.as_dictionary()['slack_webhook_url']
 	webhook = WebhookClient(url=webhook_url, ssl=ssl._create_unverified_context())  # pylint: disable=protected-access
 	response = webhook.send(text=message_string)

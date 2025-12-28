@@ -9,7 +9,7 @@ py-modules = [ "btu_py" ]
 
 [project]
 name = "btu_py"
-version = "0.0.1"
+version = "0.1.0"
 description = "An alternative BTU scheduler written in Python."
 readme = "README.md"
 authors = [
@@ -28,7 +28,7 @@ dependencies = [
  	"psutil==7.0.0",
 	"psycopg~=3.2.6",
 	"redis==5.2.1",
-	"requests==2.32.3",
+	"requests==2.32.5",
  	"rq==1.15.1",  # Keeping this pinned to Frappe Framework v15 version of rq
     "schema ~= 0.7.7",
     "semantic-version ~= 2.10.0",
