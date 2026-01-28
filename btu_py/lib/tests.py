@@ -1,6 +1,7 @@
 """ btu_py/lib/tests.py """
 
 import sys
+import btu_py
 
 def test_redis():
 	"""
@@ -189,6 +190,39 @@ def test_rq_hello_world():
 	print("\u2713 The 'data' key in Redis is a 100% match with expected value.")
 
 
+def test_unix_socket_sync():
+	"""
+	Send a message to the Unix socket listener synchronously and print the response.
+	"""
+	import pathlib
+	import socket
+	from btu_py.lib.config import AppConfig
+	btu_py.shared_config.set(AppConfig())
+
+	socket_path = pathlib.Path(btu_py.get_config_data().socket_path)
+	if not socket_path.exists():
+		raise RuntimeError(f"Unix socket file does not exist at '{socket_path}'.  Make sure the daemon is running with 'btu run-daemon'")
+
+	sock = None
+	try:
+		sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+		sock.connect(str(socket_path))
+		
+		message = "Hello Mars\n"
+		sock.sendall(message.encode())
+		
+		response = sock.recv(1024)
+		decoded_response = response.decode().strip()
+		print(f"Sent: {message.strip()}")
+		print(f"Received: {decoded_response}")
+		
+	except Exception as ex:
+		print(f"Error connecting to Unix socket: {ex}")
+	finally:
+		if sock:
+			sock.close()
+
+
 async def test_unix_socket_async():
 	"""Send a message to the Unix socket listener and print the response."""
 	import asyncio
@@ -220,21 +254,71 @@ async def test_unix_socket_async():
 		print(f"Error connecting to Unix socket: {ex}")
 
 
-def test_tcp_socket_listener():
-	"""Test the TCP socket listener."""
-	import socket
-	import btu_py
-	from btu_py.lib.config import AppConfig
-	btu_py.shared_config.set(AppConfig())
-	
-	host = btu_py.get_config_data().webserver_ip
-	port = btu_py.get_config_data().tcp_socket_port
-	message = "Hello, Mars!"
-	sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	sock.connect((host, port))
-	sock.sendall(message.encode())
-	response = sock.recv(1024)
-	decoded_response = response.decode().strip()
-	print(f"Sent Message: {message}")
-	print(f"Received Response: {decoded_response}")
-	sock.close()
+def _tcp_send_json_request(payload: dict) -> None:
+	"""
+	Helper to send a single JSON request to the TCP socket listener and print the JSON response.
+	"""
+	import json as _json
+	import socket as _socket
+	import btu_py as _btu_py
+	from btu_py.lib.config import AppConfig as _AppConfig
+
+	_btu_py.shared_config.set(_AppConfig())
+
+	host = _btu_py.get_config_data().webserver_ip
+	port = _btu_py.get_config_data().tcp_socket_port
+
+	sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+	try:
+		sock.connect((host, port))
+		message = _json.dumps(payload)
+		sock.sendall(message.encode("utf-8"))
+		print(f"Sent Message: {message}")
+
+		response = sock.recv(4096)
+		decoded_response = response.decode("utf-8").strip()
+		print(f"Received Response: {decoded_response}")
+	except Exception as ex:  # pylint: disable=broad-except
+		print(f"Error communicating with TCP socket listener: {ex}")
+	finally:
+		sock.close()
+
+
+def test_tcp_socket_echo():
+	"""
+	Test the TCP socket listener using request_type='echo'.
+	"""
+	payload = {
+		"request_type": "echo",
+		"request_content": "Hello, Mars!",
+	}
+	_tcp_send_json_request(payload)
+
+
+def test_tcp_socket_ping():
+	"""
+	Test the TCP socket listener using request_type='ping'.
+	"""
+	payload = {
+		"request_type": "ping",
+		"request_content": None,
+	}
+	_tcp_send_json_request(payload)
+
+
+def test_tcp_socket_create_task_schedule(task_schedule_id: str):
+	"""Test the TCP socket listener using request_type='create_task_schedule'."""
+	payload = {
+		"request_type": "create_task_schedule",
+		"request_content": task_schedule_id,
+	}
+	_tcp_send_json_request(payload)
+
+
+def test_tcp_socket_cancel_task_schedule(task_schedule_id: str):
+	"""Test the TCP socket listener using request_type='cancel_task_schedule'."""
+	payload = {
+		"request_type": "cancel_task_schedule",
+		"request_content": task_schedule_id,
+	}
+	_tcp_send_json_request(payload)

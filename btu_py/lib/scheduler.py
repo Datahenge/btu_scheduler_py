@@ -311,7 +311,7 @@ def rq_cancel_scheduled_task(task_schedule_id: str) -> tuple:
 		removed: bool = False
 
 		for each_row in all_task_schedules:
-			if each_row.starts_with(task_schedule_id):
+			if each_row.startswith(task_schedule_id):
 				redis_result = redis_conn.zrem(RQ_KEY_SCHEDULED_TASKS, each_row)
 				whatis(redis_result)
 				removed = True

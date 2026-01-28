@@ -99,14 +99,32 @@ def cli_run_daemon(debug):
 
 
 test_choices: list = [
-	'frappe-ping', 'pickler', 'redis',
-	'slack', 'sql', 'tcp-socket', 'test-rq-hello-world', 'unix-socket-async', 'unix-socket-sync'
+	'frappe-ping',
+	'pickler',
+	'redis',
+	'slack',
+	'sql',
+	'tcp-echo',
+	'tcp-ping',
+	'tcp-create-task-schedule',
+	'tcp-cancel-task-schedule',
+	'test-rq-hello-world',
+	'unix-socket-async',
+	'unix-socket-sync',
 ]
 @entry_point.command('test')
 @click.argument('command', type=click.Choice(test_choices, case_sensitive=False))
-def cli_test(command):
+@click.argument('task_schedule_id', required=False)
+def cli_test(command, task_schedule_id):
 	"""
 	Run a test.
+
+	For the TCP schedule-related tests, you may pass a Task Schedule ID as
+	a second argument, for example:
+
+	\b
+	  btu test tcp-create-task-schedule TS-000123
+	  btu test tcp-cancel-task-schedule TS-000123
 	"""
 	match command:
 
@@ -134,10 +152,31 @@ def cli_test(command):
 			from btu_py.lib.tests import test_sql
 			asyncio.run(test_sql(quiet=False))
 
-		case 'tcp-socket':
-			from btu_py.lib.tests import test_tcp_socket_listener
-			test_tcp_socket_listener()
-			print("TCP socket listener test completed.")
+		case 'tcp-echo':
+			from btu_py.lib.tests import test_tcp_socket_echo
+			test_tcp_socket_echo()
+			print("TCP socket echo test completed.")
+
+		case 'tcp-ping':
+			from btu_py.lib.tests import test_tcp_socket_ping
+			test_tcp_socket_ping()
+			print("TCP socket ping test completed.")
+
+		case 'tcp-create-task-schedule':
+			from btu_py.lib.tests import test_tcp_socket_create_task_schedule
+			if not task_schedule_id:
+				print("Error: You must provide a Task Schedule ID, e.g. 'btu test tcp-create-task-schedule TS-000123'.")
+				return
+			test_tcp_socket_create_task_schedule(task_schedule_id)
+			print("TCP socket create_task_schedule test completed.")
+
+		case 'tcp-cancel-task-schedule':
+			from btu_py.lib.tests import test_tcp_socket_cancel_task_schedule
+			if not task_schedule_id:
+				print("Error: You must provide a Task Schedule ID, e.g. 'btu test tcp-cancel-task-schedule TS-000123'.")
+				return
+			test_tcp_socket_cancel_task_schedule(task_schedule_id)
+			print("TCP socket cancel_task_schedule test completed.")
 
 		case 'test-rq-hello-world':
 			from btu_py.lib.tests import test_rq_hello_world
@@ -148,34 +187,8 @@ def cli_test(command):
 			asyncio.run(test_unix_socket_async())
 
 		case 'unix-socket-sync':
-			# Send a message to the Unix socket listener synchronously and print the response.
-			from btu_py.lib.config import AppConfig
-			btu_py.shared_config.set(AppConfig())
-			
-			socket_path = pathlib.Path(btu_py.get_config_data().socket_path)
-			if not socket_path.exists():
-				print(f"Error: Unix socket file does not exist at '{socket_path}'")
-				print("Make sure the daemon is running with 'btu run-daemon'")
-				return
-			
-			sock = None
-			try:
-				sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-				sock.connect(str(socket_path))
-				
-				message = "Hello Mars\n"
-				sock.sendall(message.encode())
-				
-				response = sock.recv(1024)
-				decoded_response = response.decode().strip()
-				print(f"Sent: {message.strip()}")
-				print(f"Received: {decoded_response}")
-				
-			except Exception as ex:
-				print(f"Error connecting to Unix socket: {ex}")
-			finally:
-				if sock:
-					sock.close()
+			from btu_py.lib.tests import test_unix_socket_sync
+			test_unix_socket_sync()
 
 		case _:
 			test_choices_string = '\n    '.join(test_choices)

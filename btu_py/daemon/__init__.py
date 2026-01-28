@@ -22,7 +22,8 @@ async def main():
 		internal_queue_producer,
 		review_next_execution_times,
 		unix_domain_socket_listener,
-		tcp_socket_listener
+		tcp_socket_listener,
+		set_tcp_internal_queue,
 	)
 
 	btu_py.shared_config.set(config.AppConfig())
@@ -46,6 +47,7 @@ async def main():
 		return
 
 	internal_queue = asyncio.Queue()
+	set_tcp_internal_queue(internal_queue)
 
 	print("-------------------------------------")
 	print("BTU Scheduler: by Datahenge LLC")
