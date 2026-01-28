@@ -77,7 +77,7 @@ class AppConfig:
 	This approach avoids import side effects, and polluting any namespaces.
 	"""
 	__logger: object
-	__sql_connection_string: str
+	__sql_connection_string: str = None
 	__data_dict: dict = field(default_factory=dict)
 
 	# Dataclass attributes with Defaults:
@@ -182,9 +182,17 @@ class AppConfig:
 		# 2. Try to read it back.
 		self.__read_configuration_from_disk()
 
+	def get_sql_type(self):
+		"""
+		Get the database type from configuration.
+		Returns 'postgres' or 'mariadb'.
+		"""
+		return self.as_dictionary()["sql_type"].lower()
+
 	def get_sql_connection_string(self):
 		"""
-		Create a connection string to a Postgres database.
+		Create a connection string for the configured database type.
+		Supports PostgreSQL and MariaDB/MySQL based on sql_type configuration.
 		"""
 		if not hasattr(self, "__sql_connection_string") or (not self.__sql_connection_string):
 			user = urllib.parse.quote(self.as_dictionary()["sql_user"])
@@ -192,7 +200,16 @@ class AppConfig:
 			host = self.as_dictionary()["sql_host"]
 			port = self.as_dictionary()["sql_port"]
 			database_name = self.as_dictionary()["sql_database"]
-			self.__sql_connection_string = f"postgresql://{user}:{password}@{host}:{port}/{database_name}"
+			sql_type = self.get_sql_type()
+			
+			if sql_type == "postgres":
+				# PostgreSQL connection string using asyncpg driver
+				self.__sql_connection_string = f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{database_name}"
+			elif sql_type == "mariadb":
+				# MariaDB/MySQL connection string using asyncmy driver
+				self.__sql_connection_string = f"mysql+asyncmy://{user}:{password}@{host}:{port}/{database_name}"
+			else:
+				raise ValueError(f"Unsupported sql_type: {sql_type}. Supported types: 'postgres', 'mariadb'")
 		return self.__sql_connection_string
 
 	def get_logger(self):

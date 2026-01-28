@@ -134,6 +134,11 @@ def cli_test(command):
 			from btu_py.lib.tests import test_sql
 			asyncio.run(test_sql(quiet=False))
 
+		case 'tcp-socket':
+			from btu_py.lib.tests import test_tcp_socket_listener
+			test_tcp_socket_listener()
+			print("TCP socket listener test completed.")
+
 		case 'test-rq-hello-world':
 			from btu_py.lib.tests import test_rq_hello_world
 			test_rq_hello_world()

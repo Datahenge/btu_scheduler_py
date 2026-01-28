@@ -1,7 +1,6 @@
 """ btu_py/lib/tests.py """
 
 import sys
-import psycopg
 
 def test_redis():
 	"""
@@ -16,15 +15,19 @@ async def test_sql(quiet=False):
 	"""
 	Test the connection to the Frappe database.
 	"""
-	from btu_py.lib.sql import create_connection
-	query_string = "SELECT count(*) AS record_count FROM \"tabDocType\";"
+	from btu_py.lib.sql import get_database, _quote_identifier
+	from btu_py import get_config
+	
+	config = get_config()
+	db_type = config.get_sql_type()
+	quote = lambda x: _quote_identifier(x, db_type)
+	
+	query_string = f"SELECT count(*) AS record_count FROM {quote('tabDocType')};"
 
-	aconn = await create_connection()  # returns an object which can be used as a context.
-	async with aconn.cursor() as acur:
-		acursor: psycopg.AsyncCursor = await acur.execute(query_string)
-		sql_row: dict = await acursor.fetchone()
-		if not quiet:
-			print(f"Number of records in DocType table = {sql_row['record_count']}")
+	database = await get_database()
+	sql_row = await database.fetch_one(query_string)
+	if not quiet:
+		print(f"Number of records in DocType table = {sql_row['record_count']}")
 
 
 def test_slack():
@@ -215,3 +218,23 @@ async def test_unix_socket_async():
 		await writer.wait_closed()
 	except Exception as ex:
 		print(f"Error connecting to Unix socket: {ex}")
+
+
+def test_tcp_socket_listener():
+	"""Test the TCP socket listener."""
+	import socket
+	import btu_py
+	from btu_py.lib.config import AppConfig
+	btu_py.shared_config.set(AppConfig())
+	
+	host = btu_py.get_config_data().webserver_ip
+	port = btu_py.get_config_data().tcp_socket_port
+	message = "Hello, Mars!"
+	sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	sock.connect((host, port))
+	sock.sendall(message.encode())
+	response = sock.recv(1024)
+	decoded_response = response.decode().strip()
+	print(f"Sent Message: {message}")
+	print(f"Received Response: {decoded_response}")
+	sock.close()

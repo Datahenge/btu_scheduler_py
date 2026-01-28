@@ -4,6 +4,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime as DateTimeType
+from math import e
 from zoneinfo import ZoneInfo
 
 # from temporal_lib.core import localize_datetime
@@ -352,6 +353,10 @@ async def queue_full_refill(internal_queue: object) -> int:
 	# btu_py.get_logger().debug(f"  * before refill, the queue contains {internal_queue.qsize()} values.")
 	rows_added = 0
 	enabled_schedules =  await (get_enabled_task_schedules())
+	if not enabled_schedules:
+		btu_py.get_logger().debug("queue_full_refill() : No enabled Task Schedules found in the database.")
+		return 0
+
 	# btu_py.get_logger().debug(f"  * queue_full_refill() found {len(enabled_schedules)} enabled Task Schedules.")
 	for each_row in enabled_schedules:  # each_row is a dictionary with 2 keys: 'name' and 'desc_short'
 		await internal_queue.put(each_row['schedule_key'])  # add the schedule_key ('name') of a BTU Task Schedule document.

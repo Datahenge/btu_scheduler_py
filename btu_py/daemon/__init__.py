@@ -78,7 +78,7 @@ async def main():
 			task3 = group.create_task(review_next_execution_times(internal_queue), name="Review Next Execution Times")
 			if unix_socket_enabled:
 				task4 = group.create_task(unix_domain_socket_listener(), name="Unix Socket Listener")
-			if tcp_socket_enabled:
+			elif tcp_socket_enabled:
 				task4 = group.create_task(tcp_socket_listener(), name="TCP Socket Listener")
 
 		# Wait until all tasks are concluded (forever)

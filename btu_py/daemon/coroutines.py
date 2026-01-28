@@ -5,7 +5,7 @@
 import asyncio
 import os
 import pathlib
-import socket
+# import socket
 
 import btu_py
 from btu_py import get_logger
@@ -15,6 +15,9 @@ from btu_py.lib import scheduler
 
 
 def get_tcp_socket_port() -> int:
+	"""
+	Get the TCP socket port from the configuration.
+	"""
 	return btu_py.get_config_data().get('tcp_socket_port', None)
 
 
@@ -57,10 +60,10 @@ async def internal_queue_producer(shared_queue):
 			result = await scheduler.queue_full_refill(shared_queue)
 			if result:
 				btu_py.get_logger().debug(f"  * Internal queue contains a total of {shared_queue.qsize()} values.")
-				stopwatch.reset()  # reset the stopwatch and begin a new countdown.
 				scheduler.rq_print_scheduled_tasks(False)  # log the Task Schedule:
 			else:
-				raise RuntimeError(f"Error while repopulating the internal queue! {result}")
+				btu_py.get_logger().warning("No Task Schedules found in the database.  Unable to repopulate the internal queue.")
+			stopwatch.reset()  # reset the stopwatch and begin a new countdown
 
 		await asyncio.sleep(1)  # blocking request, yields controls to another coroutine for a while.
 
@@ -98,9 +101,9 @@ async def handle_echo_client(reader, writer):
 		if not msg_bytes:
 			get_logger().info("Unix Socket: Client closed connection before sending data.")
 			return
-		
+
 		decoded_bytes: str = msg_bytes.decode().strip()
-		
+
 		get_logger().debug(f"Unix Socket: Datatype of decoded_bytes: {type(decoded_bytes)}")	# report the message
 		get_logger().info(f"Unix Socket: Received this data string: '{decoded_bytes}'")	# report the message
 
@@ -153,7 +156,7 @@ async def unix_domain_socket_listener():
 			raise ex
 		except Exception as ex:
 			raise ex
-	
+
 	server = await asyncio.start_unix_server(handle_echo_client, socket_path)  # create a new server object
 	async with server:
 		# report message
@@ -167,26 +170,28 @@ async def unix_domain_socket_listener():
 
 
 async def handle_tcp_echo(reader, writer):
-    data = await reader.read(100)
-    message = data.decode('utf-8')  # Explicitly specify UTF-8 encoding
-    addr = writer.get_extra_info('peername')
-
-    print(f"Received {data} from {addr}")
-
-    response = 'Hello, Mars'
-    writer.write(response.encode('utf-8'))  # Explicitly set UTF-8 encoding for the response
-    await writer.drain()
-
-    writer.close()
-    await writer.wait_closed()
+	"""
+	TCP Socket server handler: echos client's request back to them.
+	"""
+	data = await reader.read(100)
+	# message = data.decode('utf-8')  # Explicitly specify UTF-8 encoding
+	addr = writer.get_extra_info('peername')
+	get_logger().info(f"TCP Socket: Received {data} from {addr}")
+	response = 'Hello, Mars'
+	writer.write(response.encode('utf-8'))  # Explicitly set UTF-8 encoding for the response
+	await writer.drain()
+	writer.close()
+	await writer.wait_closed()
 
 
 async def tcp_socket_listener():
-
+	"""
+	A simple TCP Socket listener to process user requests.
+	"""
 	port_number = get_tcp_socket_port()
 	try:
 		server = await asyncio.start_server(handle_tcp_echo, '0.0.0.0', port_number)
-		addr = server.sockets[0].getsockname()
+		#addr = server.sockets[0].getsockname()
 		async with server:
 			get_logger().info(f"Starting TCP listener on port number {port_number} ...")
 			await server.serve_forever()
