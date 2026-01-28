@@ -18,7 +18,7 @@ import click
 # Package
 import btu_py
 from btu_py import __version__
-from btu_py.lib.utils import get_datetime_string, whatis
+from btu_py.lib.utils import get_datetime_string
 
 VERBOSE_MODE = False
 logging.basicConfig(level=logging.ERROR)
@@ -83,6 +83,15 @@ def cli_clear_scheduled_tasks():
 		print("All scheduled tasks cleared from Redis database.")
 	else:
 		print("Error: Unable to clear scheduled tasks from Redis database.")
+
+
+@entry_point.command('list-scheduled-tasks')
+def cli_list_scheduled_tasks():
+	"""
+	List Schedule IDs already in the scheduler queue.
+	"""
+	from btu_py.lib.scheduler import rq_print_scheduled_tasks
+	rq_print_scheduled_tasks(to_stdout=True)
 
 
 @entry_point.command('run-daemon')

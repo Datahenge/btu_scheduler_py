@@ -12,7 +12,6 @@ from temporal_lib.core import make_datetime_naive, localize_datetime
 
 # BTU
 import btu_py
-from btu_py.lib.utils import whatis  # pylint: disable=unused-import
 
 
 NoneType = type(None)

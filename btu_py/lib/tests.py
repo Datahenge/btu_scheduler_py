@@ -161,7 +161,6 @@ def test_rq_hello_world():
 	"""
 	import rq
 	from rq import Queue
-	from btu_py.lib.utils import whatis
 	from btu_py.lib.btu_rq import create_connection
 
 	# Create a new RQ Job.

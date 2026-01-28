@@ -8,7 +8,7 @@ from typing import Union
 import requests
 
 from btu_py import get_config_data
-from btu_py.lib.utils import get_frappe_base_url, whatis
+from btu_py.lib.utils import get_frappe_base_url
 
 NoneType = type(None)
 

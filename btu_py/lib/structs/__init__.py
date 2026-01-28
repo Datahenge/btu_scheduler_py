@@ -14,7 +14,7 @@ from btu_py.lib import btu_cron
 from btu_py.lib.btu_rq import RQJobWrapper
 from btu_py.lib.sql import get_task_by_id, get_task_schedule_by_id
 from btu_py.lib.structs.sanchez import get_pickled_function_from_web
-from btu_py.lib.utils import whatis, get_frappe_base_url
+from btu_py.lib.utils import get_frappe_base_url
 
 NoneType = type(None)
 

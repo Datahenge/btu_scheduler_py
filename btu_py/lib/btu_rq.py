@@ -14,7 +14,6 @@ import rq
 
 # BTU
 from btu_py import get_config, get_config_data, get_logger
-from btu_py.lib.utils import whatis
 
 NoneType = type(None)
 
@@ -153,7 +152,6 @@ def DEL_enqueue_job_immediate(existing_job_id: str):
 	# Then add the Job's ID to the queue.
 	# NOTE: The return value of 'rpush' is an integer, representing the length of the List, after the completion of the push operation.
 	push_result = redis_conn.rpush(queue_key, existing_job_id)
-	whatis(push_result)
 	if not push_result:
 		raise IOError(push_result)
 	get_logger.info(f"Enqueued RQ Job '{existing_job_id}' for immediate execution. Length of list after 'rpush' operation: {push_result}")

@@ -14,7 +14,6 @@ from btu_py import get_logger
 from btu_py.lib.btu_rq import create_connection
 from btu_py.lib.sql import get_enabled_task_schedules
 from btu_py.lib.structs import BtuTaskSchedule
-from btu_py.lib.utils import whatis
 
 
 # static RQ_SCHEDULER_NAMESPACE_PREFIX: &'static str = "rq:scheduler_instance:";
@@ -313,7 +312,6 @@ def rq_cancel_scheduled_task(task_schedule_id: str) -> tuple:
 		for each_row in all_task_schedules:
 			if each_row.startswith(task_schedule_id):
 				redis_result = redis_conn.zrem(RQ_KEY_SCHEDULED_TASKS, each_row)
-				whatis(redis_result)
 				removed = True
 
 	if removed:
