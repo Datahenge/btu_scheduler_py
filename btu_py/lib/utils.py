@@ -1,14 +1,13 @@
-""" btu_py/lib/utils.py """
+"""btu_py/lib/utils.py"""
 
 # NOTE: Functions here should not depend on other btu_py modules or namespaces.
 
-from datetime import datetime as DateTimeType
 import inspect
 import ssl
 import time
+from datetime import datetime as DateTimeType
 
 # Third Party
-import psutil
 from slack_sdk.webhook import WebhookClient
 
 
@@ -30,7 +29,7 @@ def validate_datatype(argument_name, argument_value, expected_type, mandatory=Fa
 	# Check argument type
 	if not isinstance(argument_value, expected_type):
 		if isinstance(expected_type, tuple):
-			expected_type_names = [ each.__name__ for each in expected_type ]
+			expected_type_names = [each.__name__ for each in expected_type]
 			msg = f"Argument '{argument_name}' should be one of these types: '{', '.join(expected_type_names)}'"
 			msg += f"\nFound a {type(argument_value).__name__} with value '{argument_value}' instead."
 		else:
@@ -56,7 +55,7 @@ def whatis(message):
 	parent_caller_path = parent_caller[1]
 	parent_caller_line = parent_caller[2]
 
-	message_type = str(type(message)).replace('<', '').replace('>', '')
+	message_type = str(type(message)).replace("<", "").replace(">", "")
 	msg = "---> DEBUG (dw_etl.generics.whatis)\n"
 	msg += f"* Initiated on Line: {direct_caller_linenum}"
 	msg += f"\n  * Value: {message}\n  * Type: {message_type}"
@@ -69,10 +68,10 @@ def send_message_to_slack(app_config, message_string: str) -> bool:
 	"""
 	Send a message string to Slack using Webhooks API.
 	"""
-	if 'slack_webhook_url' not in app_config.as_dictionary():
+	if "slack_webhook_url" not in app_config.as_dictionary():
 		raise RuntimeError("Cannot send message to Slack: Configuration file is missing an entry 'slack_webhook_url'")
-	webhook_url = app_config.as_dictionary()['slack_webhook_url']
-	webhook = WebhookClient(url=webhook_url, ssl=ssl._create_unverified_context())  # pylint: disable=protected-access
+	webhook_url = app_config.as_dictionary()["slack_webhook_url"]
+	webhook = WebhookClient(url=webhook_url, ssl=ssl._create_unverified_context())
 	response = webhook.send(text=message_string)
 	return response.status_code == 200 and response.body == "ok"
 
@@ -82,15 +81,17 @@ def is_port_in_use(port: int) -> bool:
 	Returns a boolean True if a socket with a particular Port is currently being used.
 	"""
 	import socket
+
 	port_as_integer = int(port)
 	with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-		return s.connect_ex(('localhost', port_as_integer)) == 0
+		return s.connect_ex(("localhost", port_as_integer)) == 0
 
 
 class Stopwatch:
 	"""
 	My own take on a stopwatch program.
 	"""
+
 	def __init__(self, description=None, disable_log=False):
 		"""
 		When 'disable_log' is True, no rows are written to "tabPerformance Log" SQL table.
@@ -106,7 +107,7 @@ class Stopwatch:
 
 	def get_elapsed_seconds_total(self):
 		now = time.perf_counter()
-		seconds_elapsed_start = round(now - self.start,2)
+		seconds_elapsed_start = round(now - self.start, 2)
 		return seconds_elapsed_start
 
 	def elapsed(self, prefix=None, no_print=False):
@@ -114,12 +115,14 @@ class Stopwatch:
 		Print the time elapsed, and write a row to Performance Log.
 		"""
 		now = time.perf_counter()
-		seconds_elapsed_start = round(now - self.start,2)
-		seconds_elapsed_last_checkpoint = round(now - self.last_checkpoint,2)
+		seconds_elapsed_start = round(now - self.start, 2)
+		seconds_elapsed_last_checkpoint = round(now - self.last_checkpoint, 2)
 
 		# Print a message to stdout
 		if not no_print:
-			message = f"{seconds_elapsed_last_checkpoint} seconds since last Checkpoint, {seconds_elapsed_start} since Start."
+			message = (
+				f"{seconds_elapsed_last_checkpoint} seconds since last Checkpoint, {seconds_elapsed_start} since Start."
+			)
 			if prefix or self.description:
 				message = f"---> {prefix or self.description} {message}"
 			print(message)
@@ -133,6 +136,7 @@ class DictToDot(dict):
 	"""
 	Makes a dictionary accessible via dot notation.
 	"""
+
 	def __init__(self, *args, **kwargs):
 		super(DictToDot, self).__init__(*args, **kwargs)
 		for arg in args:
@@ -183,6 +187,7 @@ def utc_to_rq_string(datetime_utc: DateTimeType) -> str:
 
 def get_frappe_base_url() -> str:
 	import btu_py
+
 	config_data = btu_py.get_config_data()
 
 	if config_data.webserver_port == 443:

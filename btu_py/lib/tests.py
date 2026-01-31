@@ -1,13 +1,14 @@
-""" btu_py/lib/tests.py """
+"""btu_py/lib/tests.py"""
 
-import sys
 import btu_py
+
 
 def test_redis():
 	"""
 	Test the connection to the Redis database.
 	"""
 	from btu_py.lib.btu_rq import create_connection
+
 	conn = create_connection()
 	return conn.ping()
 
@@ -16,13 +17,12 @@ async def test_sql(quiet=False):
 	"""
 	Test the connection to the Frappe database.
 	"""
-	from btu_py.lib.sql import get_database, _quote_identifier
 	from btu_py import get_config
-	
-	config = get_config()
-	db_type = config.get_sql_type()
-	quote = lambda x: _quote_identifier(x, db_type)
-	
+	from btu_py.lib.sql import _quote_identifier, get_database
+
+	def quote(x):
+		return _quote_identifier(x, get_config().get_sql_type())
+
 	query_string = f"SELECT count(*) AS record_count FROM {quote('tabDocType')};"
 
 	database = await get_database()
@@ -32,16 +32,17 @@ async def test_sql(quiet=False):
 
 
 def test_slack():
-
 	import ssl
+
 	from slack_sdk import WebClient
+
 	from btu_py import get_config
 	from btu_py.lib.utils import get_datetime_string, send_message_to_slack
 
 	# Test One
-	client = WebClient(ssl=ssl._create_unverified_context())  # pylint: disable=protected-access
+	client = WebClient(ssl=ssl._create_unverified_context())
 	api_response = client.api_test()
-	if api_response.get('ok', False):
+	if api_response.get("ok", False):
 		print("\u2713 First test successful.")
 	else:
 		print("\u2717 First failed.")
@@ -60,6 +61,7 @@ def test_frappe_ping(debug_mode=False):
 	Calls a built-in BTU endpoint 'test_ping'
 	"""
 	import requests
+
 	import btu_py
 	from btu_py.lib.utils import get_frappe_base_url
 
@@ -78,22 +80,20 @@ def test_frappe_ping(debug_mode=False):
 	if config_data.webserver_host_header:
 		headers["Host"] = config_data.webserver_host_header
 
-	response = requests.get(
-		url=url,
-		headers=headers,
-		timeout=30
-	)
+	response = requests.get(url=url, headers=headers, timeout=30)
 	print(f"Response Status Code: {response.status_code}")
 	print(f"Response JSON: {response.json()}")
 
 
-def test_pickler(debug_mode: bool=True):
+def test_pickler(debug_mode: bool = True):
 	"""
 	Function calls the Frappe web server, and asks for 'Hello World' in bytes.
 	"""
 	import json
+
 	import chardet
 	import requests
+
 	import btu_py
 	from btu_py.lib.utils import get_frappe_base_url
 
@@ -116,7 +116,7 @@ def test_pickler(debug_mode: bool=True):
 	print(f"Response Encoding = {response.encoding}")
 
 	response_bytes: bytes = response.content
-	# print(f"Response as bytes:\n{response_bytes}")	
+	# print(f"Response as bytes:\n{response_bytes}")
 
 	response_bytes_decoded = response_bytes.decode("utf-8")
 	# print(f"Response bytes as UTF-8 string:\n{response_bytes_decoded}")
@@ -124,13 +124,13 @@ def test_pickler(debug_mode: bool=True):
 	response_bytes_dict = json.loads(response_bytes_decoded)
 	# print(f"Response bytes to string, to dictionary:\n{response_bytes_dict}")
 
-	list_of_byte_integers = response_bytes_dict['message']
+	list_of_byte_integers = response_bytes_dict["message"]
 	print(f"Byte integers: {list_of_byte_integers}")
 
-	result = chardet.detect(bytes(list_of_byte_integers))     
-	print(f"Found encoding = {result['encoding']}")  
+	result = chardet.detect(bytes(list_of_byte_integers))
+	print(f"Found encoding = {result['encoding']}")
 
-	result_string = bytes(list_of_byte_integers).decode(result['encoding'])
+	result_string = bytes(list_of_byte_integers).decode(result["encoding"])
 	print(f"String:\n{result_string}")
 
 
@@ -139,35 +139,36 @@ def ping_now():
 
 
 def decode_redis(src):
-    if isinstance(src, list):
-        rv = list()
-        for key in src:
-            rv.append(decode_redis(key))
-        return rv
-    elif isinstance(src, dict):
-        rv = dict()
-        for key in src:
-            rv[key.decode()] = decode_redis(src[key])
-        return rv
-    elif isinstance(src, bytes):
-        return src.decode()
-    else:
-        raise Exception("type not handled: " +type(src))
+	if isinstance(src, list):
+		rv = list()
+		for key in src:
+			rv.append(decode_redis(key))
+		return rv
+	elif isinstance(src, dict):
+		rv = dict()
+		for key in src:
+			rv[key.decode()] = decode_redis(src[key])
+		return rv
+	elif isinstance(src, bytes):
+		return src.decode()
+	else:
+		raise Exception("type not handled: " + type(src))
 
 
 def test_rq_hello_world():
 	"""
 	Demonstrate how Python RQ constructs a Hash key, and pickles a Python function.
 	"""
-	import rq
 	from rq import Queue
+
 	from btu_py.lib.btu_rq import create_connection
 
 	# Create a new RQ Job.
-	q = Queue(name="erpnext-mybench:short", connection=create_connection(decode_responses=True))
-	result = q.enqueue(
-		ping_now
+	q = Queue(
+		name="erpnext-mybench:short",
+		connection=create_connection(decode_responses=True),
 	)
+	result = q.enqueue(ping_now)
 	new_job_id = result.id
 	print(f"\u2713 RQ created a new Job with identifier '{new_job_id}'")
 
@@ -195,26 +196,30 @@ def test_unix_socket_sync():
 	"""
 	import pathlib
 	import socket
+
 	from btu_py.lib.config import AppConfig
+
 	btu_py.shared_config.set(AppConfig())
 
 	socket_path = pathlib.Path(btu_py.get_config_data().socket_path)
 	if not socket_path.exists():
-		raise RuntimeError(f"Unix socket file does not exist at '{socket_path}'.  Make sure the daemon is running with 'btu run-daemon'")
+		raise RuntimeError(
+			f"Unix socket file does not exist at '{socket_path}'.  Make sure the daemon is running with 'btu run-daemon'"
+		)
 
 	sock = None
 	try:
 		sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 		sock.connect(str(socket_path))
-		
+
 		message = "Hello Mars\n"
 		sock.sendall(message.encode())
-		
+
 		response = sock.recv(1024)
 		decoded_response = response.decode().strip()
 		print(f"Sent: {message.strip()}")
 		print(f"Received: {decoded_response}")
-		
+
 	except Exception as ex:
 		print(f"Error connecting to Unix socket: {ex}")
 	finally:
@@ -226,27 +231,29 @@ async def test_unix_socket_async():
 	"""Send a message to the Unix socket listener and print the response."""
 	import asyncio
 	import pathlib
+
 	import btu_py
 	from btu_py.lib.config import AppConfig
+
 	btu_py.shared_config.set(AppConfig())
-	
+
 	socket_path = pathlib.Path(btu_py.get_config_data().socket_path)
 	if not socket_path.exists():
 		print(f"Error: Unix socket file does not exist at '{socket_path}'")
 		print("Make sure the daemon is running with 'btu run-daemon'")
 		return
-	
+
 	try:
 		reader, writer = await asyncio.open_unix_connection(str(socket_path))
 		message = "Hello Mars\n"
 		writer.write(message.encode())
 		await writer.drain()
-		
+
 		response = await reader.readline()
 		decoded_response = response.decode().strip()
 		print(f"Sent: {message.strip()}")
 		print(f"Received: {decoded_response}")
-		
+
 		writer.close()
 		await writer.wait_closed()
 	except Exception as ex:
@@ -259,6 +266,7 @@ def _tcp_send_json_request(payload: dict) -> None:
 	"""
 	import json as _json
 	import socket as _socket
+
 	import btu_py as _btu_py
 	from btu_py.lib.config import AppConfig as _AppConfig
 
@@ -277,7 +285,7 @@ def _tcp_send_json_request(payload: dict) -> None:
 		response = sock.recv(4096)
 		decoded_response = response.decode("utf-8").strip()
 		print(f"Received Response: {decoded_response}")
-	except Exception as ex:  # pylint: disable=broad-except
+	except Exception as ex:
 		print(f"Error communicating with TCP socket listener: {ex}")
 	finally:
 		sock.close()

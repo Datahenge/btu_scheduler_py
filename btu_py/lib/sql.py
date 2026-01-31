@@ -1,6 +1,7 @@
-""" btu_py/lib/sql.py """
+"""btu_py/lib/sql.py"""
 
 from databases import Database
+
 from btu_py import get_config
 
 # Global database instance (initialized on first use)
@@ -10,14 +11,14 @@ _database_instance: Database = None
 def _quote_identifier(identifier: str, db_type: str) -> str:
 	"""
 	Quote a database identifier based on the database type.
-	
+
 	PostgreSQL uses double quotes: "identifier"
 	MariaDB/MySQL uses backticks: `identifier`
-	
+
 	Args:
 		identifier: The identifier to quote (table name, column name, etc.)
 		db_type: The database type ('postgres' or 'mariadb')
-	
+
 	Returns:
 		The quoted identifier
 	"""
@@ -29,19 +30,23 @@ def _quote_identifier(identifier: str, db_type: str) -> str:
 		raise ValueError(f"Unsupported database type for identifier quoting: {db_type}")
 
 
+def quote(sql_object):
+	return _quote_identifier(sql_object, get_config().get_sql_type())
+
+
 async def get_database() -> Database:
 	"""
 	Get or create the database connection instance.
 	The database instance is created once and reused.
 	"""
 	global _database_instance
-	
+
 	if _database_instance is None:
 		config = get_config()
 		connection_string = config.get_sql_connection_string()
 		_database_instance = Database(connection_string)
 		await _database_instance.connect()
-	
+
 	return _database_instance
 
 
@@ -58,10 +63,7 @@ async def get_task_schedule_by_id(task_schedule_id: str) -> dict:
 	"""
 	Returns a single Task Schedule row from the Frappe SQL database.
 	"""
-	config = get_config()
-	db_type = config.get_sql_type()
-	quote = lambda x: _quote_identifier(x, db_type)
-	
+
 	query_string = f"""
 		SELECT
 			 TaskSchedule.name
@@ -90,10 +92,7 @@ async def get_task_schedule_by_id(task_schedule_id: str) -> dict:
 		"""
 
 	database = await get_database()
-	sql_row = await database.fetch_one(
-		query_string,
-		values={"task_schedule_id": task_schedule_id}
-	)
+	sql_row = await database.fetch_one(query_string, values={"task_schedule_id": task_schedule_id})
 	return sql_row
 
 
@@ -101,10 +100,7 @@ async def get_task_by_id(task_id: str) -> dict:
 	"""
 	Returns a single BTU Task row from the Frappe SQL database.
 	"""
-	config = get_config()
-	db_type = config.get_sql_type()
-	quote = lambda x: _quote_identifier(x, db_type)
-	
+
 	query_string = f"""
 		SELECT
 			name 				AS task_key, 
@@ -119,12 +115,9 @@ async def get_task_by_id(task_id: str) -> dict:
 			name = :task_id
 		LIMIT 1;
 	"""
-	
+
 	database = await get_database()
-	sql_row = await database.fetch_one(
-		query_string,
-		values={"task_id": task_id}
-	)
+	sql_row = await database.fetch_one(query_string, values={"task_id": task_id})
 	return sql_row
 
 
@@ -132,9 +125,6 @@ async def get_enabled_tasks() -> list:
 	"""
 	Returns a list of all enable BTU Task records from Frappe SQL database.
 	"""
-	config = get_config()
-	db_type = config.get_sql_type()
-	quote = lambda x: _quote_identifier(x, db_type)
 
 	query_string = f"""
 		SELECT
@@ -146,7 +136,7 @@ async def get_enabled_tasks() -> list:
 			docstatus = 1
 		AND task_type = 'Persistent';
 	"""
-	
+
 	database = await get_database()
 	sql_rows = await database.fetch_all(query_string)
 	return sql_rows
@@ -156,10 +146,7 @@ async def get_enabled_task_schedules() -> list:
 	"""
 	Returns a list of all enable BTU Task Schedule records from Frappe SQL database.
 	"""
-	config = get_config()
-	db_type = config.get_sql_type()
-	quote = lambda x: _quote_identifier(x, db_type)
-	
+
 	query_string = f"""
 		SELECT
 			 name			AS schedule_key
@@ -169,7 +156,8 @@ async def get_enabled_task_schedules() -> list:
 		WHERE
 			enabled = 1;
 	"""
-	
+
 	database = await get_database()
 	sql_rows = await database.fetch_all(query_string)
 	return sql_rows
+

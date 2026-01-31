@@ -3,9 +3,6 @@
 '''
 
 	match matches.subcommand() {
-		("test-pickler", Some(_)) => {
-			cli_btu_test_pickler(&app_config, debug_mode);
-		},
 		("list-jobs", Some(_)) => {
 			cli_list_jobs(&app_config);
 		},
@@ -56,17 +53,6 @@ fn cli_list_jobs(app_config: &AppConfig) {
         }
     }
 }
-
-
-/**
-  Prints to console the ID and Description of all enabled BTU Tasks in the MariaDB database.
-*/ 
-fn cli_list_tasks(app_config: &AppConfig) {
-    print_enabled_tasks(app_config, true);
-}
-
-
-
 
 fn cli_queue_job_immediately(app_config: &AppConfig, rq_job_id: &str) -> () {
     // Given an existing RQ Job, push it immediately into Redis Queue.
@@ -124,11 +110,5 @@ fn cli_show_job_details(app_config: &AppConfig, job_id: &str) -> () {
         }
     }
 }
-
-
-fn cli_show_scheduled_jobs(app_config: &AppConfig) {
-	scheduler::rq_print_scheduled_tasks(app_config, true);
-}
-
 
 '''

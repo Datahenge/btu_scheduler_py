@@ -5,8 +5,10 @@ This is the Python-based alternative to the original 2021 scheduler: https://git
 - Create a new Python virtual environment, and activate it.
 - Download the btu-py app:  `git clone https://github.com/Datahenge/btu_scheduler_py.git`
 - Install with pip:
-    ```
+  ```bash
   pip install -e .
+  # or with development dependencies like linters
+  pip install -e ".[development]"
   ```
 - Create a new directory in Linux to hold the BTU scheduler files and folders.
     * `sudo mkdir  /etc/btu_scheduler`

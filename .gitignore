@@ -1,4 +1,7 @@
 pyvenv.d
+venv
+venv.d
 *.pyc
 *.egg-info
 __pycache__
+.ruff_cache/

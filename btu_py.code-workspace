@@ -24,12 +24,18 @@
 			"**/MANIFEST.in": true,
 			"**/*.egg-info": true,
 			"pyvenv.d": true,
-			"**/.pylintrc": false,
 			".ipynb_checkpoints": true
 		},
 		"python.defaultInterpreterPath": "pyvenv.d/bin/python",
-		"pylint.path": [
-			"pyvenv.d/bin/pylint"
-		]
+		"[python]": {
+			"editor.defaultFormatter": "charliermarsh.ruff",
+			"editor.formatOnSave": true,
+			"editor.formatOnSaveMode": "file",
+			"editor.codeActionsOnSave": {
+			  "source.fixAll": "explicit",
+			  "source.organizeImports": "explicit"
+			}
+		  },
+        "ruff.lint.enable": true,
 	}
 }

@@ -9,7 +9,7 @@ py-modules = [ "btu_py" ]
 
 [project]
 name = "btu_py"
-version = "0.1.0"
+version = "0.1.1"
 description = "An alternative BTU scheduler written in Python."
 readme = "README.md"
 authors = [
@@ -23,24 +23,28 @@ classifiers = [
 
 dependencies = [
     "click ~= 8.1.7",
-	"cron-converter==1.2.1",
+	# "cron-converter==1.2.1",
 	"croniter==6.0.0",
- 	"psutil==7.0.0",
+	"databases[asyncpg,asyncmy]>=0.9.0",  # Multi-database support: asyncpg for PostgreSQL, asyncmy for MariaDB/MySQL
 	"psycopg~=3.2.6",  # Kept for backward compatibility, but databases library will use asyncpg
 	"redis==5.2.1",
 	"requests==2.32.5",
  	"rq==1.15.1",  # Keeping this pinned to Frappe Framework v15 version of rq
     "schema ~= 0.7.7",
-    "semantic-version ~= 2.10.0",
  	"slack_sdk~=3.31.0",
     "temporal_lib>=0.1.2",
 	"toml~=0.10.2",
-	"databases[asyncpg,asyncmy]>=0.9.0",  # Multi-database support: asyncpg for PostgreSQL, asyncmy for MariaDB/MySQL
 ]
 
 [project.optional-dependencies]
-development = ["pylint", "twine"]
+development = ["twine", "ruff>=0.14.0",]
 
 [project.scripts]
 btu-py = "btu_py.cli:entry_point"
 btu = "btu_py.cli:entry_point"
+
+[tool.ruff]
+line-length = 120  # Default is 88
+
+[tool.ruff.format]
+indent-style = "tab"

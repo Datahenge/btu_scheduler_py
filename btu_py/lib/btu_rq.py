@@ -1,12 +1,15 @@
-""" btu_py/lib/btu_rq.py """
+"""btu_py/lib/btu_rq.py"""
 
 # NOTE: Deliberately naming this "btu_rq" to distinguish from the Third Party library namespace "rq"
 
-from __future__ import annotations  # Defers evalulation of type annonations; hopefully unnecessary once Python 3.14 is released.
+from __future__ import (
+	annotations,
+)  # Defers evalulation of type annonations; hopefully unnecessary once Python 3.14 is released.
+
+import uuid
 from dataclasses import dataclass
 from datetime import datetime as DateTimeType
 from typing import Union
-import uuid
 from zoneinfo import ZoneInfo
 
 import redis
@@ -22,7 +25,7 @@ def datetime_to_rq_date_string(some_datetime):
 	return some_datetime.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
-def create_connection():
+def create_connection(decode_responses=True):
 	"""
 	Creates a connection to the Redis database.
 	"""
@@ -30,27 +33,30 @@ def create_connection():
 		raise RuntimeError("Application configuration is not loaded.")
 
 	return redis.StrictRedis(
-		host= get_config().as_dictionary()["rq_host"],
-		port= get_config().as_dictionary()["rq_port"],
-		decode_responses=True
+		host=get_config().as_dictionary()["rq_host"],
+		port=get_config().as_dictionary()["rq_port"],
+		decode_responses=decode_responses,
 	)
+
 
 def create_raw_connection():
 	if not get_config().as_dictionary():
 		raise RuntimeError("Application configuration is not loaded.")
 
 	return redis.StrictRedis(
-		host= get_config().as_dictionary()["rq_host"],
-		port= get_config().as_dictionary()["rq_port"],
+		host=get_config().as_dictionary()["rq_host"],
+		port=get_config().as_dictionary()["rq_port"],
 		decode_responses=False,
-		encoding=None
+		encoding=None,
 	)
 
+
 @dataclass
-class RQJobWrapper():
+class RQJobWrapper:
 	"""
 	Wrapper for the third-party RQ Job object.
 	"""
+
 	job_key: str
 	job_key_short: str
 	fully_qualified_key: str  # includes the prefix rq::job
@@ -72,28 +78,27 @@ class RQJobWrapper():
 
 	@staticmethod
 	def new_with_defaults() -> RQJobWrapper:
-
 		uuid_string: str = uuid.uuid4()  # example: 11f83e81-83ea-4df2-aa7e-cd12d8dec779
 		new_job_key = f"{get_config_data().jobs_site_prefix}|{uuid_string}"
-		return RQJobWrapper (
-			job_key = new_job_key,  # erp.farmtopeople.com|11f83e81-83ea-4df2-aa7e-cd12d8dec779
-			fully_qualified_key = f"rq:job:{new_job_key}",
-			job_key_short = uuid_string,
-			created_at = DateTimeType.now(ZoneInfo("UTC")),
-			description = "",
-			data = None,
-			ended_at = None,
-			enqueued_at = None,  # not initially populated
-			exc_info = None,
-			last_heartbeat = DateTimeType.now(ZoneInfo("UTC")),
-			meta = None,
-			origin = "default",  # temporarily
-			result_ttl = None,
-			started_at = None,
-			status = "queued",  # techically not enqueued until later, but there is no other initial Status to choose from.
-			timeout = 3600,  # default of 3600 seconds (1 hour)
-			worker_name = "",
-			rq_job_object = None
+		return RQJobWrapper(
+			job_key=new_job_key,  # erp.farmtopeople.com|11f83e81-83ea-4df2-aa7e-cd12d8dec779
+			fully_qualified_key=f"rq:job:{new_job_key}",
+			job_key_short=uuid_string,
+			created_at=DateTimeType.now(ZoneInfo("UTC")),
+			description="",
+			data=None,
+			ended_at=None,
+			enqueued_at=None,  # not initially populated
+			exc_info=None,
+			last_heartbeat=DateTimeType.now(ZoneInfo("UTC")),
+			meta=None,
+			origin="default",  # temporarily
+			result_ttl=None,
+			started_at=None,
+			status="queued",  # techically not enqueued until later, but there is no other initial Status to choose from.
+			timeout=3600,  # default of 3600 seconds (1 hour)
+			worker_name="",
+			rq_job_object=None,
 		)
 
 	def DEL_create_only(self):
@@ -108,13 +113,13 @@ class RQJobWrapper():
 			"worker_name": self.worker_name,
 			"ended_at": self.ended_at or "",
 			"result_ttl": self.result_ttl or "",
-			"enqueued_at":  self.enqueued_at or "",
+			"enqueued_at": self.enqueued_at or "",
 			"last_heartbeat": datetime_to_rq_date_string(self.last_heartbeat) if self.last_heartbeat else "",
 			"origin": self.origin,
 			"description": self.description,
 			"started_at": self.started_at or "",
 			"created_at": datetime_to_rq_date_string(self.created_at),
-			"timeout": self.timeout
+			"timeout": self.timeout,
 		}
 
 		# When using hset_multiple, the values must all be of the same Type.
@@ -136,7 +141,8 @@ def DEL_enqueue_job_immediate(existing_job_id: str):
 	redis_conn = create_connection()
 
 	from rq.registry import StartedJobRegistry
-	registry = StartedJobRegistry('default', connection=redis_conn)
+
+	registry = StartedJobRegistry("default", connection=redis_conn)
 	queued_job_ids = registry.get_queue().job_ids
 	print(f"queued_job_ids: {queued_job_ids}")
 
@@ -154,4 +160,6 @@ def DEL_enqueue_job_immediate(existing_job_id: str):
 	push_result = redis_conn.rpush(queue_key, existing_job_id)
 	if not push_result:
 		raise IOError(push_result)
-	get_logger.info(f"Enqueued RQ Job '{existing_job_id}' for immediate execution. Length of list after 'rpush' operation: {push_result}")
+	get_logger.info(
+		f"Enqueued RQ Job '{existing_job_id}' for immediate execution. Length of list after 'rpush' operation: {push_result}"
+	)

@@ -1,13 +1,11 @@
-""" btu_py/lib/structs/__init__.py """
-
-# pylint: disable=too-many-instance-attributes
+"""btu_py/lib/structs/__init__.py"""
 
 from dataclasses import dataclass
 from datetime import datetime as DateTimeType
-import requests
 from typing import Union
 from zoneinfo import ZoneInfo
 
+import requests
 
 from btu_py import get_config_data, get_logger
 from btu_py.lib import btu_cron
@@ -20,13 +18,13 @@ NoneType = type(None)
 
 
 @dataclass
-class BtuTask():
+class BtuTask:
 	task_key: str
 	desc_short: str
 	desc_long: str
 	arguments: Union[NoneType, str]
 	path_to_function: str  # example:  btu.manual_tests.ping_with_wait
-	max_task_duration: int # example:  600 seconds
+	max_task_duration: int  # example:  600 seconds
 
 	@staticmethod
 	async def init_from_task_key(task_key: str):
@@ -40,7 +38,7 @@ class BtuTask():
 			desc_long=task_data["desc_long"],
 			arguments=task_data["arguments"],
 			path_to_function=task_data["path_to_function"],
-			max_task_duration=task_data["max_task_duration"]
+			max_task_duration=task_data["max_task_duration"],
 		)
 
 	async def convert_to_wrapped_rq_job(self) -> RQJobWrapper:
@@ -56,7 +54,7 @@ class BtuTask():
 
 
 @dataclass
-class BtuTaskSchedule():
+class BtuTaskSchedule:
 	id: str
 	task_key: str
 	task_description: str
@@ -95,17 +93,13 @@ class BtuTaskSchedule():
 		wrapped_job.origin = self.queue_name
 
 		task = await BtuTask.init_from_task_key(self.task_key)
-		wrapped_job.data =await get_pickled_function_from_web(self.task_key, self.id)
+		wrapped_job.data = await get_pickled_function_from_web(self.task_key, self.id)
 		wrapped_job.timeout = task.max_task_duration
 		return wrapped_job
 
 	def get_next_runtimes(self, from_utc_datetime=None, number_results=1) -> list[DateTimeType]:
-
 		return btu_cron.tz_cron_to_utc_datetimes(
-				self.cron_string,
-				self.cron_timezone,
-				from_utc_datetime,
-				number_results
+			self.cron_string, self.cron_timezone, from_utc_datetime, number_results
 		)
 
 	def enqueue_for_next_available_worker(self):
@@ -123,16 +117,11 @@ class BtuTaskSchedule():
 		if config_data.webserver_host_header:
 			headers["Host"] = config_data.webserver_host_header
 
-		response = requests.post(
-			url=url,
-			headers=headers,
-			params = {
-				"task_schedule_key": self.id
-			},
-			timeout=30
-		)
+		response = requests.post(url=url, headers=headers, params={"task_schedule_key": self.id}, timeout=30)
 
-		get_logger().debug(f"Response from Frappe to Enqueue: Status Code = {response.status_code}, Data = {response.json()}")
+		get_logger().debug(
+			f"Response from Frappe to Enqueue: Status Code = {response.status_code}, Data = {response.json()}"
+		)
 		if response.status_code == 200:
 			get_logger().info(f"Successfully enqueued Task Schedule: '{self.id}'")
 		else:

@@ -1,6 +1,4 @@
-""" btu_py/lib/structus/sanchez.py """
-
-import zlib
+"""btu_py/lib/structus/sanchez.py"""
 
 import json
 from typing import Union
@@ -30,11 +28,8 @@ async def get_pickled_function_from_web(task_id: str, task_schedule_id: Union[st
 	response = requests.get(
 		url=url,
 		headers=headers,
-		params = {
-			"task_id": task_id,
-			"task_schedule_id": task_schedule_id
-		},
-		timeout=30
+		params={"task_id": task_id, "task_schedule_id": task_schedule_id},
+		timeout=30,
 	)
 
 	if response.status_code != 200:
@@ -43,7 +38,7 @@ async def get_pickled_function_from_web(task_id: str, task_schedule_id: Union[st
 	# The value of response.content are encoded bytes.
 	# Once decoded you have a String like this:  {"message": [ 10, 42, 2, 84, 4, 24, 28 ] }
 
-	response_decoded = response.content.decode('utf-8')
+	response_decoded = response.content.decode("utf-8")
 	response_json = json.loads(response_decoded)  # convert that into JSON
 	response_integer_array = response_json["message"]  # Python List of integers
 
