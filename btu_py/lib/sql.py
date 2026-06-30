@@ -75,16 +75,19 @@ async def get_task_schedule_by_id(task_schedule_id: str) -> dict:
 			,TaskSchedule.argument_overrides
 			,TaskSchedule.schedule_description
 			,TaskSchedule.cron_string
-			,Configuration.value									AS cron_timezone
+			,COALESCE(
+				NULLIF(TaskSchedule.cron_timezone, ''),
+				Configuration.value
+			)													AS cron_timezone
 		FROM
 			{quote("tabBTU Task Schedule")}		AS TaskSchedule
 
-		INNER JOIN
+		LEFT JOIN
 			{quote("tabSingles")}	AS Configuration
 		ON
 			Configuration.doctype = 'BTU Configuration'
 		AND Configuration.{quote("field")} = 'cron_time_zone'
-	
+
 		WHERE
 			TaskSchedule.name = :task_schedule_id
 

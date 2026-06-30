@@ -10,7 +10,6 @@ from zoneinfo import ZoneInfo
 
 # Third Party
 from croniter import croniter
-from temporal_lib.core import localize_datetime, make_datetime_naive
 
 # BTU
 import btu_py
@@ -121,13 +120,18 @@ def tz_cron_to_utc_datetimes(
 	number_of_results: int = 1,
 ) -> list[DateTimeType]:
 	"""
-	Given a cron string and Time Zone, what are the next set of UTC Datetime values?
-	Documentation: https://docs.rs/cron/0.9.0/cron
-	"""
+	Given a cron string (in local time) and a timezone, return the next N UTC execution datetimes.
 
-	# NOTE 1:  This is a VERY simplistic implementation.
-	# What is truly required is something that handles Daylight Savings and related time adjustments.
-	# But it's good enough for today.
+	The cron string must be stored in local time — NOT UTC.  This function converts the UTC
+	anchor to the schedule's local timezone before passing it to croniter, so cron positions
+	(hour, minute, etc.) are interpreted as local clock time.  Each result is then converted
+	back to UTC for use in Redis / RQ.
+
+	DST is handled correctly:
+	  - Spring forward gap: croniter skips impossible local times (e.g. 2:30 AM on transition day).
+	  - Fall back fold: croniter fires once on the first occurrence of the ambiguous hour.
+	  - "0 18 * * *" in America/New_York yields 23:00 UTC in winter and 22:00 UTC in summer.
+	"""
 
 	if not cron_timezone:
 		cron_timezone = btu_py.get_config().timezone()
@@ -139,42 +143,16 @@ def tz_cron_to_utc_datetimes(
 	if not isinstance(from_utc_datetime, DateTimeType):
 		raise TypeError(from_utc_datetime)
 
-	this_cronstruct = CronStruct.from_string(cron_expression_string)
+	# Convert UTC anchor to the schedule's local timezone.
+	# croniter interprets the cron positions against the start_time's timezone, so passing a
+	# timezone-aware local datetime causes it to return timezone-aware local datetimes.
+	from_local_datetime = from_utc_datetime.astimezone(cron_timezone)
 
-	# 	The initial results below will be UTC datetimes.  Because that is what croniter generates.
-	#
-	# Example 1:
-	# * Assume local time is 9:01 AM Pacific (1701 UTC)
-	# * Assume a cron schedule with a cadence of 30 minutes, no specific Day or Month.
-	# * The schedule will return a datetime value = 2025-03-22T17:30:00Z
+	cron_str = CronStruct.from_string(cron_expression_string).to_string()
+	iterator = croniter(cron_str, from_local_datetime)
 
-	iterator = croniter(this_cronstruct.to_string(), from_utc_datetime)
-	result_datetimes = [iterator.get_next(DateTimeType) for each in range(number_of_results)]
-
-	# Scenario #1: If the Hour component is the entire range of hours (*), then accept the Schedule as-is.
-	if isinstance(this_cronstruct.hour, NoneType) or this_cronstruct.hour == "*":
-		return result_datetimes
-
-	# Secenario 2: A specific Hour of the day.
-	# 1. Strip the time zone component, so the UTC DateTime becomes a Naive Datetime.
-	# 2. Change to Local Times by applying the function argument `cron_timezone`
-	# At this point, it's as-if croniter generated a Local time in the first place.
-	# 3. Finally, shift the DateTime to UTC, in preparation for integration with RQ.
-	#
-	# NOTE: yes this will completely break during Daylight Savings.  For today, it's 80/20.
-
-	modified_results = []
-	for utc_datetime in result_datetimes:
-		# This logic acquires the exact same Hour:Minute, but in local time.
-		naive_datetime = make_datetime_naive(utc_datetime)
-		tz_aware = localize_datetime(naive_datetime, cron_timezone)  # localize to config file's TimeZone
-		new_utc_datetime = tz_aware.astimezone(ZoneInfo("UTC"))
-
-		modified_results.append(new_utc_datetime)
-
-		if utc_datetime.date().day != new_utc_datetime.date().day:
-			btu_py.get_logger().debug(
-				f"Original and new 'utc_datetime' fall on different days ({utc_datetime} vs {new_utc_datetime})"
-			)
-
-	return modified_results
+	utc_zone = ZoneInfo("UTC")
+	return [
+		iterator.get_next(DateTimeType).astimezone(utc_zone)
+		for _ in range(number_of_results)
+	]
