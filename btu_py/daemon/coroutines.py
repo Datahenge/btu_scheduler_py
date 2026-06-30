@@ -11,6 +11,10 @@ from btu_py.lib import scheduler
 from btu_py.lib.structs import BtuTaskSchedule
 from btu_py.lib.utils import Stopwatch
 
+# Redis key where incoming commands are delivered from the Frappe web server.
+# Must match REDIS_COMMAND_QUEUE in btu/btu_api/scheduler.py.
+REDIS_COMMAND_QUEUE = "btu:scheduler:commands"
+
 _tcp_internal_queue: asyncio.Queue | None = None
 
 
@@ -476,3 +480,104 @@ async def tcp_socket_listener():
 			print(f"Port {port_number} is already in use. Please choose a different port.")
 		else:
 			raise ex
+
+
+async def _dispatch_redis_command(request_type: str, request_content: str) -> None:
+	"""
+	Execute a command that arrived via the Redis RPC queue.
+
+	Called after the receipt ACK has already been sent, so this function
+	can take as long as it needs without affecting the caller's wait time.
+	"""
+	get_logger().info(f"Redis RPC: dispatching '{request_type}' with content '{request_content}'.")
+
+	if request_type == "ping":
+		get_logger().info("Redis RPC: ping received.")
+		return
+
+	if request_type == "create_task_schedule":
+		internal_queue = _get_tcp_internal_queue()
+		if internal_queue is None:
+			get_logger().error("Redis RPC: internal queue unavailable; cannot process create_task_schedule.")
+			return
+		await internal_queue.put(request_content)
+		get_logger().info(f"Redis RPC: enqueued Task Schedule ID '{request_content}'.")
+		return
+
+	if request_type == "cancel_task_schedule":
+		try:
+			from btu_py.lib import scheduler
+			scheduler.rq_cancel_scheduled_task(request_content)
+			scheduler.rq_print_scheduled_tasks(to_stdout=False)
+			get_logger().info(f"Redis RPC: cancelled Task Schedule '{request_content}'.")
+		except Exception as ex:
+			get_logger().error(f"Redis RPC: error cancelling Task Schedule '{request_content}': {ex}")
+		return
+
+	get_logger().warning(f"Redis RPC: unrecognised request_type '{request_type}'.")
+
+
+async def redis_command_listener() -> None:
+	"""
+	Primary control-plane listener for the BTU Scheduler daemon.
+
+	Monitors REDIS_COMMAND_QUEUE using a blocking BRPOP (run in a thread executor
+	so it does not stall the asyncio event loop).  On receiving a command:
+
+	  1. Immediately pushes a receipt ACK to the caller's response_key.
+	     The Frappe web worker is blocking on BLPOP(response_key) and unblocks here.
+	     This happens before any execution work, keeping the caller's wait near-instant.
+
+	  2. Dispatches the command to _dispatch_redis_command(), which runs after the
+	     caller has already received its acknowledgement.
+
+	See docs/scheduler_redis_rpc.md for the full protocol description.
+	"""
+	from btu_py.lib.btu_rq import create_connection
+
+	redis_conn = create_connection()
+	loop = asyncio.get_event_loop()
+
+	get_logger().info(f"Redis RPC command listener started, monitoring queue '{REDIS_COMMAND_QUEUE}'.")
+
+	while True:
+		try:
+			# Blocking BRPOP with a 1-second timeout, run in a thread so the event loop
+			# stays free for the scheduler's other coroutines during the wait.
+			result = await loop.run_in_executor(
+				None,
+				lambda: redis_conn.blpop([REDIS_COMMAND_QUEUE], timeout=1)
+			)
+
+			if result is None:
+				continue  # nothing arrived within the 1-second window; loop back
+
+			_, raw_message = result
+
+			try:
+				command = json.loads(raw_message)
+			except json.JSONDecodeError:
+				get_logger().warning(f"Redis RPC: received non-JSON message, discarding: {raw_message!r}")
+				continue
+
+			request_type = command.get("request_type", "")
+			request_content = command.get("request_content", "")
+			response_key = command.get("response_key")
+
+			# Step 1: ACK receipt BEFORE executing anything.
+			# The Frappe web worker is blocked on BLPOP(response_key); this unblocks it.
+			if response_key:
+				ack = json.dumps({
+					"status": "ok",
+					"request_type": request_type,
+					"message": "Command received by BTU Scheduler.",
+				})
+				redis_conn.lpush(response_key, ack)
+				redis_conn.expire(response_key, 60)  # auto-clean orphaned keys if caller died
+
+			# Step 2: Now execute the command (caller is already unblocked).
+			await _dispatch_redis_command(request_type, request_content)
+
+		except Exception as ex:
+			get_logger().error(f"Redis RPC listener unhandled error: {ex}")
+			await asyncio.sleep(1)  # brief back-off before resuming

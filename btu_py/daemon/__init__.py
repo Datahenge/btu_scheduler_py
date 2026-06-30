@@ -18,6 +18,7 @@ async def main():
 		get_tcp_socket_port,
 		internal_queue_consumer,
 		internal_queue_producer,
+		redis_command_listener,
 		review_next_execution_times,
 		set_tcp_internal_queue,
 		tcp_socket_listener,
@@ -28,6 +29,7 @@ async def main():
 	btu_py.get_logger().debug("Initialized configuration in Main Thread.")
 	unix_socket_enabled = not bool(btu_py.get_config().as_dictionary().get("disable_unix_socket", False))
 	tcp_socket_enabled = not bool(btu_py.get_config().as_dictionary().get("disable_tcp_socket", False))
+	redis_rpc_enabled = not bool(btu_py.get_config().as_dictionary().get("disable_redis_rpc", False))
 
 	# Make sure Redis is available.
 	try:
@@ -57,7 +59,13 @@ async def main():
 		f"* Performs a full-refresh of BTU Task Schedules every {btu_py.get_config_data().full_refresh_internal_secs} seconds."
 	)
 
-	# Unix Socket
+	# Redis RPC (primary control-plane)
+	if redis_rpc_enabled:
+		print("* Listens for commands via Redis RPC (primary control channel).")
+	else:
+		print("Warning: Redis RPC command listener is disabled.")
+
+	# Unix Socket (legacy)
 	if unix_socket_enabled:
 		print("* Listens on Unix Domain Socket for requests from the Frappe BTU web application.")
 	else:
@@ -88,10 +96,12 @@ async def main():
 				review_next_execution_times(internal_queue),
 				name="Review Next Execution Times",
 			)
+			if redis_rpc_enabled:
+				group.create_task(redis_command_listener(), name="Redis RPC Command Listener")
 			if unix_socket_enabled:
-				task4 = group.create_task(unix_domain_socket_listener(), name="Unix Socket Listener")
-			elif tcp_socket_enabled:
-				task4 = group.create_task(tcp_socket_listener(), name="TCP Socket Listener")
+				group.create_task(unix_domain_socket_listener(), name="Unix Socket Listener")
+			if tcp_socket_enabled:
+				group.create_task(tcp_socket_listener(), name="TCP Socket Listener")
 
 		# Wait until all tasks are concluded (forever)
 		btu_py.get_logger().info(

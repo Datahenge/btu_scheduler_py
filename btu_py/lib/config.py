@@ -35,6 +35,7 @@ def get_config_schema():
 			"time_zone_string": And(str, len),  # America/Los_Angeles
 			"tracing_level": And(str, len),  # INFO
 			"startup_without_database_connections": bool,
+			Optional("disable_redis_rpc"): Or(int, bool),
 			Optional("disable_unix_socket"): Or(int, bool),
 			Optional("disable_tcp_socket"): Or(int, bool),
 			"sql_type": And(str, len, lambda x: x in ("mariadb", "postgres")),
