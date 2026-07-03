@@ -55,23 +55,27 @@ def cmd_about():
 
 
 @entry_point.command("config")
-@click.argument("command", type=click.Choice(["show", "edit"], case_sensitive=False))
+@click.argument("command", type=click.Choice(["show", "edit", "path"], case_sensitive=False))
 def cmd_config(command):
 	"""
 	Configuration of btu-py CLI.
 	"""
-	from btu_py.lib.config import AppConfig
+	from btu_py.lib.config import get_env_file_path, load_config
 
-	btu_py.shared_config.set(AppConfig())
+	btu_py.shared_config.set(load_config())
 
 	match command.split():
 		case ["show"]:
 			btu_py.get_config().print_config()
+		case ["path"]:
+			print(get_env_file_path())
 		case ["edit"]:
-			editor = "/usr/bin/editor"  # On Linux this is a link, configured by 'alternatives'
-			if not editor:
-				raise RuntimeError("No value is set for Linux environment variable $EDITOR.")
-			os.system(f"{editor} {btu_py.get_config().get_config_file_path()}")
+			env_path = get_env_file_path()
+			env_path.parent.mkdir(parents=True, exist_ok=True)
+			if not env_path.exists():
+				env_path.touch()
+			editor = os.environ.get("EDITOR", "/usr/bin/editor")
+			os.system(f"{editor} {env_path}")
 		case _:
 			print(f"Subcommand '{command}' not recognized.")
 

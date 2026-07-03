@@ -29,23 +29,17 @@ def create_connection(decode_responses=True):
 	"""
 	Creates a connection to the Redis database.
 	"""
-	if not get_config().as_dictionary():
-		raise RuntimeError("Application configuration is not loaded.")
-
 	return redis.StrictRedis(
-		host=get_config().as_dictionary()["rq_host"],
-		port=get_config().as_dictionary()["rq_port"],
+		host=get_config().rq_host,
+		port=get_config().rq_port,
 		decode_responses=decode_responses,
 	)
 
 
 def create_raw_connection():
-	if not get_config().as_dictionary():
-		raise RuntimeError("Application configuration is not loaded.")
-
 	return redis.StrictRedis(
-		host=get_config().as_dictionary()["rq_host"],
-		port=get_config().as_dictionary()["rq_port"],
+		host=get_config().rq_host,
+		port=get_config().rq_port,
 		decode_responses=False,
 		encoding=None,
 	)

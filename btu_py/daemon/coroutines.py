@@ -37,7 +37,7 @@ def get_tcp_socket_port() -> int:
 	"""
 	Get the TCP socket port from the configuration.
 	"""
-	return btu_py.get_config_data().get("tcp_socket_port", None)
+	return btu_py.get_config_data().tcp_socket_port
 
 
 async def internal_queue_consumer(shared_queue):
@@ -119,7 +119,7 @@ async def review_next_execution_times(shared_queue):
 		# I want this thread to execute at roughly the same interval.
 		# By subtracting the Time Elapsed above, from the desired Wait Time, we know how much longer the thread should sleep.
 		await asyncio.sleep(
-			btu_py.get_config().data.scheduler_polling_interval - elapsed_seconds
+			btu_py.get_config().scheduler_polling_interval - elapsed_seconds
 		)  # wait N seconds before trying again.
 
 

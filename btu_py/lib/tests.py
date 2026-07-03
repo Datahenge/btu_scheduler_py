@@ -197,9 +197,9 @@ def test_unix_socket_sync():
 	import pathlib
 	import socket
 
-	from btu_py.lib.config import AppConfig
+	from btu_py.lib.config import reload_config
 
-	btu_py.shared_config.set(AppConfig())
+	btu_py.shared_config.set(reload_config())
 
 	socket_path = pathlib.Path(btu_py.get_config_data().socket_path)
 	if not socket_path.exists():
@@ -233,9 +233,9 @@ async def test_unix_socket_async():
 	import pathlib
 
 	import btu_py
-	from btu_py.lib.config import AppConfig
+	from btu_py.lib.config import reload_config
 
-	btu_py.shared_config.set(AppConfig())
+	btu_py.shared_config.set(reload_config())
 
 	socket_path = pathlib.Path(btu_py.get_config_data().socket_path)
 	if not socket_path.exists():
@@ -268,9 +268,9 @@ def _tcp_send_json_request(payload: dict) -> None:
 	import socket as _socket
 
 	import btu_py as _btu_py
-	from btu_py.lib.config import AppConfig as _AppConfig
+	from btu_py.lib.config import reload_config
 
-	_btu_py.shared_config.set(_AppConfig())
+	_btu_py.shared_config.set(reload_config())
 
 	host = _btu_py.get_config_data().webserver_ip
 	port = _btu_py.get_config_data().tcp_socket_port

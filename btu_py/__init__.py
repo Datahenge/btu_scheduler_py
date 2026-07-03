@@ -19,7 +19,7 @@ def get_config_data():
 	# If the context variable has not been initialized, do so now.
 	if isinstance(shared_config.get("config"), str):
 		initialize_shared_config()
-	return shared_config.get("config").data
+	return shared_config.get("config")
 
 
 def get_logger():
@@ -30,6 +30,6 @@ def initialize_shared_config():
 	"""
 	A useful one-liner function for initalizing the global content variable.
 	"""
-	from btu_py.lib.config import AppConfig
+	from btu_py.lib.config import load_config
 
-	shared_config.set(AppConfig())
+	shared_config.set(load_config())

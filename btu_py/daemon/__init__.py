@@ -25,11 +25,11 @@ async def main():
 		unix_domain_socket_listener,
 	)
 
-	btu_py.shared_config.set(config.AppConfig())
+	btu_py.shared_config.set(config.load_config())
 	btu_py.get_logger().debug("Initialized configuration in Main Thread.")
-	unix_socket_enabled = not bool(btu_py.get_config().as_dictionary().get("disable_unix_socket", False))
-	tcp_socket_enabled = not bool(btu_py.get_config().as_dictionary().get("disable_tcp_socket", False))
-	redis_rpc_enabled = not bool(btu_py.get_config().as_dictionary().get("disable_redis_rpc", False))
+	unix_socket_enabled = not btu_py.get_config().disable_unix_socket
+	tcp_socket_enabled = not btu_py.get_config().disable_tcp_socket
+	redis_rpc_enabled = not btu_py.get_config().disable_redis_rpc
 
 	# Make sure Redis is available.
 	try:
@@ -104,8 +104,6 @@ async def main():
 				group.create_task(tcp_socket_listener(), name="TCP Socket Listener")
 
 		# Wait until all tasks are concluded (forever)
-		btu_py.get_logger().info(
-			f"All tasks have completed now: {task1.result()}, {task2.result()}, {task3.result()}, {task4.result()}"
-		)
+		btu_py.get_logger().info(f"All tasks have completed now: {task1.result()}, {task2.result()}, {task3.result()}")
 	except Exception as ex:
 		raise ex
