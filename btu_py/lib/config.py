@@ -9,7 +9,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
-from pydantic import Field, field_validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from btu_py.lib.app_logger import build_new_logger
@@ -23,11 +23,6 @@ _SECRET_FIELDS = frozenset({"sql_password", "webserver_token", "slack_webhook_ur
 def get_env_file_path() -> pathlib.Path:
 	"""Return the path to the optional .env file."""
 	return config_home / "btu_scheduler" / ".env"
-
-
-def default_logger_path() -> pathlib.Path:
-	state_home = pathlib.Path(os.environ.get("XDG_STATE_HOME", "~/.local/state")).expanduser()
-	return state_home / "btu_scheduler" / "logger.log"
 
 
 class SchedulerSettings(BaseSettings):
@@ -60,7 +55,6 @@ class SchedulerSettings(BaseSettings):
 	disable_tcp_socket: bool = False
 	webserver_host_header: str | None = None
 	slack_webhook_url: str | None = None
-	logger_path: pathlib.Path = Field(default_factory=default_logger_path)
 
 	_sql_connection_string: str | None = None
 	_logger: object | None = None
@@ -91,10 +85,7 @@ class SchedulerSettings(BaseSettings):
 
 	def get_logger(self):
 		if not self._logger:
-			log_path = pathlib.Path(self.logger_path)
-			log_path.parent.mkdir(parents=True, exist_ok=True)
-			print("Constructing a new logger ...")
-			self._logger = build_new_logger("btu_py", log_path, self.tracing_level)
+			self._logger = build_new_logger("btu_py", self.tracing_level)
 		return self._logger
 
 	def timezone(self) -> ZoneInfo:

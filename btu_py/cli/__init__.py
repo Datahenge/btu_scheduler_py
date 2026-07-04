@@ -17,6 +17,42 @@ VERBOSE_MODE = False
 logging.basicConfig(level=logging.ERROR)
 
 
+def _require_config(load_fn):
+	"""
+	Call load_fn() and return the result. On failure, print a human-readable
+	message listing the missing BTU_SCHEDULER_* environment variables and exit.
+	"""
+	import sys
+
+	from pydantic import ValidationError
+
+	try:
+		return load_fn()
+	except ValidationError as exc:
+		missing = [err["loc"][0] for err in exc.errors() if err["type"] == "missing"]
+		other = [err for err in exc.errors() if err["type"] != "missing"]
+		print("Error: BTU Scheduler configuration is incomplete.")
+		if missing:
+			print("\nMissing required environment variables:")
+			for field in missing:
+				env_var = f"BTU_SCHEDULER_{field.upper()}"
+				print(f"  {env_var}")
+			env_path_hint = None
+			try:
+				from btu_py.lib.config import get_env_file_path
+
+				env_path_hint = get_env_file_path()
+			except Exception:
+				pass
+			print("\nSet these variables in your shell environment, or add them to the optional")
+			if env_path_hint:
+				print(f"  .env file at: {env_path_hint}")
+		for err in other:
+			field = err["loc"][0] if err["loc"] else "?"
+			print(f"  BTU_SCHEDULER_{str(field).upper()}: {err['msg']}")
+		sys.exit(1)
+
+
 # ========
 # Click Group and the starting point for the CLI
 # ========
@@ -62,10 +98,9 @@ def cmd_config(command):
 	"""
 	from btu_py.lib.config import get_env_file_path, load_config
 
-	btu_py.shared_config.set(load_config())
-
 	match command.split():
 		case ["show"]:
+			btu_py.shared_config.set(_require_config(load_config))
 			btu_py.get_config().print_config()
 		case ["path"]:
 			print(get_env_file_path())
@@ -250,24 +285,4 @@ def cli_service_status():
 	subprocess.run(command_list, check=False, stderr=subprocess.STDOUT)
 
 
-@entry_point.command("logs")
-@click.argument("command", type=click.Choice(["truncate", "show"], case_sensitive=False))
-def cli_logs(command):
-	match command.split():
-		case ["truncate"]:
-			for each_file in ("/etc/btu_scheduler/logs/worker.log",):
-				try:
-					print(f"DOES NOT WORK YET Truncating log file '{each_file}' ...")
-					with open(each_file, "w", encoding="utf-8"):
-						pass
-				except Exception as ex:
-					print(f"Error: {ex}")
-
-		case ["show"]:
-			with open("/etc/btu_scheduler/logs/main.log", encoding="utf-8") as file:
-				for line in file.readlines()[-100:]:
-					print(line, end="")
-
-		case _:
-			print(f"Subcommand '{command}' not recognized.")
 

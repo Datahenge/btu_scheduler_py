@@ -24,6 +24,7 @@
 			"**/MANIFEST.in": true,
 			"**/*.egg-info": true,
 			"pyvenv.d": true,
+			".venv": true,
 			".ipynb_checkpoints": true
 		},
 		"python.defaultInterpreterPath": "pyvenv.d/bin/python",

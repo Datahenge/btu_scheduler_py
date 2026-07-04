@@ -25,7 +25,7 @@ async def main():
 		unix_domain_socket_listener,
 	)
 
-	btu_py.shared_config.set(config.load_config())
+	btu_py.initialize_shared_config()
 	btu_py.get_logger().debug("Initialized configuration in Main Thread.")
 	unix_socket_enabled = not btu_py.get_config().disable_unix_socket
 	tcp_socket_enabled = not btu_py.get_config().disable_tcp_socket

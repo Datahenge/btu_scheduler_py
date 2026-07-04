@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv run *)",
+      "Bash(/home/sysop/projects/python/btu_scheduler_py/.venv/bin/btu config *)"
+    ]
+  }
+}
