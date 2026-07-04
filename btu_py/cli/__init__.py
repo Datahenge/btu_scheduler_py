@@ -163,8 +163,6 @@ test_choices: list = [
 	"tcp-create-task-schedule",
 	"tcp-cancel-task-schedule",
 	"test-rq-hello-world",
-	"unix-socket-async",
-	"unix-socket-sync",
 ]
 
 
@@ -251,16 +249,6 @@ def cli_test(command, task_schedule_id):
 			from btu_py.lib.tests import test_rq_hello_world
 
 			test_rq_hello_world()
-
-		case "unix-socket-async":
-			from btu_py.lib.tests import test_unix_socket_async
-
-			asyncio.run(test_unix_socket_async())
-
-		case "unix-socket-sync":
-			from btu_py.lib.tests import test_unix_socket_sync
-
-			test_unix_socket_sync()
 
 		case _:
 			test_choices_string = "\n    ".join(test_choices)

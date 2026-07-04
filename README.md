@@ -39,7 +39,6 @@ All settings use the `BTU_SCHEDULER_` prefix. Required variables:
 | `BTU_SCHEDULER_RQ_HOST` | Redis host |
 | `BTU_SCHEDULER_RQ_PORT` | Redis port |
 | `BTU_SCHEDULER_TCP_SOCKET_PORT` | TCP listener port |
-| `BTU_SCHEDULER_SOCKET_PATH` | Unix domain socket path |
 | `BTU_SCHEDULER_WEBSERVER_IP` | Frappe web server IP |
 | `BTU_SCHEDULER_WEBSERVER_PORT` | Frappe web server port |
 | `BTU_SCHEDULER_WEBSERVER_TOKEN` | Frappe API token |
@@ -50,7 +49,6 @@ Optional variables (with defaults):
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `BTU_SCHEDULER_DISABLE_REDIS_RPC` | `false` | Disable Redis RPC listener |
-| `BTU_SCHEDULER_DISABLE_UNIX_SOCKET` | `false` | Disable Unix socket listener |
 | `BTU_SCHEDULER_DISABLE_TCP_SOCKET` | `false` | Disable TCP socket listener |
 | `BTU_SCHEDULER_WEBSERVER_HOST_HEADER` | (unset) | Host header for multi-tenant Frappe |
 | `BTU_SCHEDULER_SLACK_WEBHOOK_URL` | (unset) | Slack webhook for notifications |

@@ -22,12 +22,10 @@ async def main():
 		review_next_execution_times,
 		set_tcp_internal_queue,
 		tcp_socket_listener,
-		unix_domain_socket_listener,
 	)
 
 	btu_py.initialize_shared_config()
 	btu_py.get_logger().debug("Initialized configuration in Main Thread.")
-	unix_socket_enabled = not btu_py.get_config().disable_unix_socket
 	tcp_socket_enabled = not btu_py.get_config().disable_tcp_socket
 	redis_rpc_enabled = not btu_py.get_config().disable_redis_rpc
 
@@ -65,12 +63,6 @@ async def main():
 	else:
 		print("Warning: Redis RPC command listener is disabled.")
 
-	# Unix Socket (legacy)
-	if unix_socket_enabled:
-		print("* Listens on Unix Domain Socket for requests from the Frappe BTU web application.")
-	else:
-		print("Warning: Unix Domain Socket is disabled.")
-
 	# TCP Socket
 	if tcp_socket_enabled:
 		print("* Listens on TCP Socket for requests from the Frappe BTU web application.")
@@ -98,8 +90,6 @@ async def main():
 			)
 			if redis_rpc_enabled:
 				group.create_task(redis_command_listener(), name="Redis RPC Command Listener")
-			if unix_socket_enabled:
-				group.create_task(unix_domain_socket_listener(), name="Unix Socket Listener")
 			if tcp_socket_enabled:
 				group.create_task(tcp_socket_listener(), name="TCP Socket Listener")
 

@@ -2,8 +2,6 @@
 
 import asyncio
 import json
-import os
-import pathlib
 
 import btu_py
 from btu_py import get_logger
@@ -121,92 +119,6 @@ async def review_next_execution_times(shared_queue):
 		await asyncio.sleep(
 			btu_py.get_config().scheduler_polling_interval - elapsed_seconds
 		)  # wait N seconds before trying again.
-
-
-async def handle_unix_socket_echo(reader, writer):
-	"""
-	Unix Socket server handler: echos client's request back to them.
-	"""
-	get_logger().info("Unix Socket: New client connection; applying handler 'handle_echo_client'")
-
-	try:
-		msg_bytes = await reader.readline()  # read the message from the client
-		if not msg_bytes:
-			get_logger().info("Unix Socket: Client closed connection before sending data.")
-			return
-
-		decoded_bytes: str = msg_bytes.decode().strip()
-
-		get_logger().debug(f"Unix Socket: Datatype of decoded_bytes: {type(decoded_bytes)}")  # report the message
-		get_logger().info(f"Unix Socket: Received this data string: '{decoded_bytes}'")  # report the message
-
-		try:
-			writer.write(msg_bytes)  # send the message back (this is a synchronous, blocking call)
-			await writer.drain()  # wait for the buffer to empty
-
-			get_logger().info(
-				"Unix Socket: Successfully echoed the message back to the client.  Closing connection."
-			)  # Close the connection
-		except (
-			ConnectionResetError,
-			ConnectionError,
-			BrokenPipeError,
-			OSError,
-		) as conn_ex:
-			# Client closed connection before we could send response - this is normal, not an error
-			get_logger().debug(f"Unix Socket: Client closed connection during response: {conn_ex}")
-		except Exception as ex:
-			get_logger().error(f"Unix Socket: Error sending response to client: {ex}")
-		finally:
-			# Always try to close the writer, even if there was an error
-			try:
-				writer.close()
-				await writer.wait_closed()
-			except Exception as close_ex:
-				get_logger().debug(f"Unix Socket: Error closing writer (connection may already be closed): {close_ex}")
-	except (ConnectionResetError, ConnectionError, BrokenPipeError, OSError) as conn_ex:
-		# Client closed connection during read - this is normal, not an error
-		get_logger().debug(f"Unix Socket: Client closed connection during read: {conn_ex}")
-		try:
-			writer.close()
-		except Exception:
-			pass  # Connection already closed
-	except Exception as ex:
-		get_logger().error(f"Unix Socket: Error in handle_echo_client() : {ex}")
-		# Don't re-raise - handle gracefully to prevent "Task exception was never retrieved" errors
-		try:
-			writer.close()
-		except Exception:
-			pass  # Connection may already be closed
-
-
-async def unix_domain_socket_listener():
-	"""
-	A simple Unix Domain Socket listener to process user requests.
-	"""
-	socket_path = pathlib.Path(btu_py.get_config_data().socket_path)
-	if not socket_path.parent.exists():
-		raise OSError(f"The parent directory for the socket file ({socket_path.parent}) does not exist.")
-
-	if socket_path.exists():
-		try:
-			os.unlink(socket_path)  # remove any preexisting socket files.
-		except OSError as ex:
-			print(f"Error in unix_domain_socket_listener() : {ex}")
-			raise ex
-		except Exception as ex:
-			raise ex
-
-	server = await asyncio.start_unix_server(handle_unix_socket_echo, socket_path)  # create a new server object
-	async with server:
-		# report message
-		get_logger().info(f"SOCKET: Unix Domain Socket listening for incoming connections via file '{socket_path}'")
-		await server.serve_forever()  # accept connections
-
-	# close the connection
-	# connection.close()
-	# remove the socket file
-	# os.unlink(socket_path)
 
 
 async def _send_tcp_json_response(writer, payload: dict) -> None:
