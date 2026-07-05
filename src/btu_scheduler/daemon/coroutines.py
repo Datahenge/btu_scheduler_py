@@ -1,4 +1,4 @@
-"""btu_scheduler/daemon/couroutines.py"""
+"""btu_scheduler/daemon/coroutines.py"""
 
 import asyncio
 import json
@@ -43,15 +43,13 @@ def get_tcp_socket_port() -> int:
 
 async def internal_queue_consumer(shared_queue: asyncio.Queue[str]) -> None:
 	"""
-	Reads TSIKs from the internal couroutine Queue, and adds them to Python RQ.
+	Reads TSIKs from the internal coroutine Queue, and adds them to Python RQ.
 	"""
 	while True:
 		if shared_queue.qsize():
-			# log.debug(f"IQM: Number of items in Queue = {shared_queue.qsize()}")
 			next_task_schedule_id = (
 				await shared_queue.get()
 			)  # NOTE: The coroutine will hang out here, doing nothing, until something shows up in the Queue.
-			# log.info(f"IQM: The next Task Schedule ID = {next_task_schedule_id}")
 			task_schedule: BtuTaskSchedule = await BtuTaskSchedule.init_from_schedule_key(next_task_schedule_id)
 			if task_schedule:
 				scheduler.add_task_schedule_to_rq(task_schedule)
@@ -160,8 +158,8 @@ async def handle_tcp_request(reader, writer):
 			try:
 				writer.close()
 				await writer.wait_closed()
-			except Exception:
-				pass
+			except Exception as ex:
+				log.debug(f"TCP Socket: Error closing writer: {ex}")
 			return
 
 		log.info(f"TCP Socket: Received raw data from {addr}: {data!r}")
@@ -319,8 +317,7 @@ async def handle_tcp_request(reader, writer):
 		if request_type == "cancel_task_schedule":
 			try:
 				scheduler.rq_cancel_scheduled_task(task_schedule_id)
-				# After cancellation, print remaining tasks to stdout as requested.
-				scheduler.rq_print_scheduled_tasks(to_stdout=True)
+				scheduler.rq_print_scheduled_tasks()
 			except Exception as ex:
 				log.error(f"TCP Socket: Error while attempting to cancel Task Schedule {task_schedule_id}: {ex}")
 				await _send_tcp_json_response(
@@ -337,7 +334,7 @@ async def handle_tcp_request(reader, writer):
 				{
 					"status": "ok",
 					"request_type": "cancel_task_schedule",
-					"data": f"Task Schedule {task_schedule_id} cancellation requested; remaining tasks printed to stdout.",
+					"data": f"Task Schedule {task_schedule_id} cancellation requested; remaining tasks logged.",
 				},
 			)
 			return
@@ -355,8 +352,8 @@ async def handle_tcp_request(reader, writer):
 		try:
 			writer.close()
 			await writer.wait_closed()
-		except Exception:
-			pass
+		except Exception as ex:
+			log.debug(f"TCP Socket: Error closing writer: {ex}")
 	except Exception as ex:
 		log.error(f"TCP Socket: Unexpected error in handle_tcp_request(): {ex}")
 		try:
@@ -371,8 +368,8 @@ async def handle_tcp_request(reader, writer):
 			try:
 				writer.close()
 				await writer.wait_closed()
-			except Exception:
-				pass
+			except Exception as ex:
+				log.debug(f"TCP Socket: Error closing writer: {ex}")
 
 
 async def tcp_socket_listener():
@@ -417,10 +414,8 @@ async def _dispatch_redis_command(request_type: str, request_content: str) -> No
 
 	if request_type == "cancel_task_schedule":
 		try:
-			from btu_scheduler.lib import scheduler
-
 			scheduler.rq_cancel_scheduled_task(request_content)
-			scheduler.rq_print_scheduled_tasks(to_stdout=False)
+			scheduler.rq_print_scheduled_tasks()
 			log.info(f"Redis RPC: cancelled Task Schedule '{request_content}'.")
 		except Exception as ex:
 			log.error(f"Redis RPC: error cancelling Task Schedule '{request_content}': {ex}")

@@ -94,11 +94,12 @@ class RQScheduledTask:
 	def sort_list_by_next_datetime(list_of_rq_scheduled_task) -> list:
 		return sorted(list_of_rq_scheduled_task, key=lambda x: x.next_execution_as_unix_timestamp)
 
+
 def add_task_schedule_to_rq(task_schedule: BtuTaskSchedule):
 	"""
 	Developer Notes:
 
-	1. This function's only caller is couroutine 'internal_queue_consumer'
+	1. This function's only caller is coroutine 'internal_queue_consumer'
 
 	2. This function's concept was derived from the Python 'rq_scheduler' library.  In that library, the public
 		entrypoint (from the website) was named a function 'cron()'.  That cron() function did a few things:
@@ -131,7 +132,7 @@ def add_task_schedule_to_rq(task_schedule: BtuTaskSchedule):
 		I'm going to call this a TSIK (Task Scheduled Instance Key)
 	"""
 
-	# Notice the line below: Only retrieving the 1st value from the result vector.  Later, it might be helpful to fetch
+	# Notice the line below: Only retrieving the 1st value from the result list.  Later, it might be helpful to fetch
 	# multiple Next Execution Times, because of time zone shifts around Daylight Savings.
 
 	next_runtimes: list[DateTimeType] = task_schedule.get_next_runtimes()
@@ -142,10 +143,6 @@ def add_task_schedule_to_rq(task_schedule: BtuTaskSchedule):
 		next_execution_as_unix_timestamp=int(next_runtimes[0].timestamp()),  # force into an Integer
 		next_execution_as_datetime_utc=next_runtimes[0],
 	)
-
-	# print(f"Next Execution Time UTC: {rq_scheduled_task.next_execution_as_datetime_utc}")
-	# print(f"Next Execution Timestamp: {rq_scheduled_task.next_execution_as_unix_timestamp}")
-	# print(f"Next Execution TISK: {rq_scheduled_task.to_tsik()}")
 
 	redis_conn = create_connection()
 	if not redis_conn:
@@ -191,8 +188,6 @@ def fetch_task_schedules_ready_for_rq(sched_before_unix_time: int) -> list:
 	# represents the Unix Timestamp the Job is supposed to execute on.  By fetching ALL values below a certain
 	# threshold (Timestamp), the program knows precisely which Task Schedules to enqueue.
 
-	# rq_print_scheduled_tasks(&app_config);
-
 	log.debug(
 		"fetch_task_schedules_ready_for_rq() : reviewing 'Next Execution Times' for each Task Schedule in Redis..."
 	)
@@ -208,12 +203,11 @@ def fetch_task_schedules_ready_for_rq(sched_before_unix_time: int) -> list:
 	if len(zranges) > 0:
 		log.info(f"Found {len(zranges)} Task Schedules that qualify for immediate execution.")
 
-	# The strings in the vector are a concatenation:  Task Schedule ID, pipe character, Unix Time.
+	# The strings in the list are a concatenation: Task Schedule ID, pipe character, Unix Time.
 	# Need to split off the trailing Unix Time, to obtain a list of Task Schedules.
-	# NOTE: The syntax below is -very- "Rusty" (imo): maps the values returned by an iterator, using a closure function.
 	task_schedules_to_enqueue = [RQScheduledTask.from_tsik(TSIK(each)) for each in zranges]
 
-	# Finally, return a Vector of Task Schedule identifiers:
+	# Finally, return a list of Task Schedule identifiers:
 	return task_schedules_to_enqueue
 
 
@@ -223,9 +217,7 @@ async def check_and_run_eligible_task_schedules(internal_queue: asyncio.Queue[st
 	If the Next Execution Time is in the past?  Then place the RQ Job into the appropriate queue.  RQ and Workers take over from there.
 	"""
 	current_datetime_utc = DateTimeType.now(ZoneInfo("UTC"))
-	# log.info(f"Current DateTime (UTC) is {current_datetime_utc}")
 	current_timestamp = current_datetime_utc.timestamp()
-	# log.info(f"Current Timestamp (UTC) is {current_timestamp}")
 
 	# Developer Note: This function is analgous to the 'rq-scheduler' Python function: 'Scheduler.enqueue_jobs()'
 	for task_schedule_instance in fetch_task_schedules_ready_for_rq(current_timestamp):
@@ -242,7 +234,7 @@ async def run_immediate_scheduled_task(task_schedule_instance: RQScheduledTask, 
 	redis_conn = create_connection()
 	if not redis_conn:
 		log.error("Early exit from run_immediate_scheduled_task(); cannot establish a connection to Redis database.")
-		return  # If cannot connect to Redis, do not panic the thread.  Instead, return an empty Vector.
+		return  # If cannot connect to Redis, do not panic the thread.  Instead, return an empty list.
 
 	# 1. Read the SQL database to construct a BTU Task Schedule struct.
 	try:
@@ -344,14 +336,11 @@ def rq_cancel_scheduled_task(task_schedule_id: str) -> None:
 		log.info("Scheduled Task not found in Redis Queue.")
 
 
-def rq_print_scheduled_tasks(to_stdout: bool):
+def rq_print_scheduled_tasks():
 	tasks: list[RQScheduledTask] = rq_get_scheduled_tasks()
 	for result in sorted(tasks, key=lambda x: x.task_schedule_id):
 		message: str = f"Task Schedule {result.task_schedule_id} is scheduled to occur later at {result.next_execution_as_datetime_utc}"
-		if to_stdout:
-			print(f"{message}")
-		else:
-			log.info(message)
+		log.info(message)
 
 
 def clear_all_scheduled_tasks() -> bool:
@@ -370,14 +359,12 @@ async def queue_full_refill(internal_queue: asyncio.Queue[str]) -> int:
 	"""
 	Queries the Frappe database, adding every active Task Schedule to BTU internal queue.
 	"""
-	# log.debug(f"  * before refill, the queue contains {internal_queue.qsize()} values.")
 	rows_added = 0
 	enabled_schedules = await get_enabled_task_schedules()
 	if not enabled_schedules:
 		log.debug("queue_full_refill() : No enabled Task Schedules found in the database.")
 		return 0
 
-	# log.debug(f"  * queue_full_refill() found {len(enabled_schedules)} enabled Task Schedules.")
 	for each_row in enabled_schedules:  # each_row is a dictionary with 2 keys: 'name' and 'desc_short'
 		await internal_queue.put(
 			each_row["schedule_key"]
@@ -386,15 +373,3 @@ async def queue_full_refill(internal_queue: asyncio.Queue[str]) -> int:
 	if rows_added:
 		log.debug(f"  * filled internal queue with {rows_added} Task Schedule identifiers.")
 	return rows_added
-
-
-# add_task_to_rq(
-# cron_string,				# A cron string (e.g. "0 0 * * 0")
-# func=func,				  # Python function to be queued
-# args=[arg1, arg2],		  # Arguments passed into function when executed
-# kwargs={'foo': 'bar'},	  # Keyword arguments passed into function when executed
-# repeat=10,				  # Repeat this number of times (None means repeat forever)
-# queue_name=queue_name,	  # In which queue the job should be put in
-# meta={'foo': 'bar'},		# Arbitrary pickleable data on the job itself
-# use_local_timezone=False	# Interpret hours in the local timezone
-# )

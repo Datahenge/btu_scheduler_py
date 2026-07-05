@@ -111,7 +111,7 @@ def cli_list_scheduled_tasks():
 	"""
 	from btu_scheduler.lib.scheduler import rq_print_scheduled_tasks
 
-	rq_print_scheduled_tasks(to_stdout=True)
+	rq_print_scheduled_tasks()
 
 
 @entry_point.command("run-daemon")

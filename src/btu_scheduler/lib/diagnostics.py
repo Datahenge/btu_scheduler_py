@@ -29,7 +29,6 @@ async def diagnose_sql(quiet=False):
 		print(f"Number of records in DocType table = {sql_row['record_count']}")
 
 
-
 def diagnose_frappe_ping(debug_mode=False):
 	"""
 	Calls a built-in BTU endpoint 'test_ping'
@@ -89,13 +88,10 @@ def diagnose_pickler(debug_mode: bool = True):
 	print(f"Response Encoding = {response.encoding}")
 
 	response_bytes: bytes = response.content
-	# print(f"Response as bytes:\n{response_bytes}")
 
 	response_bytes_decoded = response_bytes.decode("utf-8")
-	# print(f"Response bytes as UTF-8 string:\n{response_bytes_decoded}")
 
 	response_bytes_dict = json.loads(response_bytes_decoded)
-	# print(f"Response bytes to string, to dictionary:\n{response_bytes_dict}")
 
 	list_of_byte_integers = response_bytes_dict["message"]
 	print(f"Byte integers: {list_of_byte_integers}")
@@ -109,7 +105,6 @@ def diagnose_pickler(debug_mode: bool = True):
 
 def ping_now():
 	print("pong")
-
 
 
 def diagnose_rq_hello_world():
@@ -132,12 +127,6 @@ def diagnose_rq_hello_world():
 	# Based on previous observations, this is the contents of the 'data" field
 	expected_data_string = b"x\x9ck`\x9d\xaa\xc2\x00\x01\x1a=\x92I%\xa5\xf1\x05\x95z9\x99Iz%\xa9\xc5%\xc5z\x05\x99y\xe9\xf1y\xf9\xe5S\xfc4k\xa7\x94L\xd1\x03\x003\x1c\x0fF"
 	print(f"Number of bytes in expected string = {len(expected_data_string)}")
-
-	# FYI, if you want to see the hexademical bytes, here's how:
-	#
-	# print(expected_data_string.hex(' ', 1))
-	#
-	# A byte consists of 8 bits, and a single hex character can represent 4 bits.  So 2 hexadecimal characters represent 1 byte.
 
 	# Read the 'data' key from Redis database.  Do NOT decode the responses!
 	actual_data_string = create_connection(decode_responses=False).hget(f"rq:job:{new_job_id}", "data")
