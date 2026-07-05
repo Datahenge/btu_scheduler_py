@@ -61,7 +61,7 @@ async def get_task_schedule_by_id(task_schedule_id: str) -> dict:
 			,TaskSchedule.task
 			,TaskSchedule.task_description
 			,TaskSchedule.enabled
-			,CONCAT('erpnext-mybench:', TaskSchedule.queue_name) 	AS queue_name
+			,TaskSchedule.queue_name
 			,TaskSchedule.redis_job_id
 			,TaskSchedule.argument_overrides
 			,TaskSchedule.schedule_description

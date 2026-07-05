@@ -34,7 +34,6 @@ class SchedulerSettings(XdgSettings):
 	webserver_ip: str
 	webserver_port: int
 	webserver_token: str
-	jobs_site_prefix: str
 	disable_redis_rpc: bool = False
 	disable_tcp_socket: bool = False
 	webserver_host_header: str | None = None

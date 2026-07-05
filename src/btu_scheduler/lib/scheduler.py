@@ -70,7 +70,7 @@ class RQScheduledTask:
 		return f"{self.task_schedule_id}|{self.next_execution_as_unix_timestamp}"
 
 	@staticmethod
-	def from_tsik(tsik: TSIK) -> object:
+	def from_tsik(tsik: TSIK) -> "RQScheduledTask":
 		if not isinstance(tsik, TSIK):
 			raise TypeError(tsik)
 
@@ -200,9 +200,7 @@ def fetch_task_schedules_ready_for_rq(sched_before_unix_time: int) -> list:
 		log.error("fetch_task_schedules_ready_for_rq(): Cannot establish connection to Redis; returning an empty list.")
 		return []
 
-	# TODO: As per Redis 6.2.0, the command 'zrangebyscore' is considered deprecated.
-	# Please prefer using the ZRANGE command with the BYSCORE argument in new code.
-	zranges: list = redis_conn.zrangebyscore(RQ_KEY_SCHEDULED_TASKS, 0, sched_before_unix_time)
+	zranges: list = redis_conn.zrange(RQ_KEY_SCHEDULED_TASKS, 0, sched_before_unix_time, byscore=True)
 	if not zranges:
 		return []
 
@@ -322,7 +320,7 @@ def rq_get_scheduled_tasks() -> list[RQScheduledTask]:
 	return wrapped_result
 
 
-def rq_cancel_scheduled_task(task_schedule_id: str) -> tuple:
+def rq_cancel_scheduled_task(task_schedule_id: str) -> None:
 	"""
 	Remove a Task Schedule from the Redis database, to prevent it from executing in the future.
 	"""

@@ -390,7 +390,7 @@ async def tcp_socket_listener():
 		if "Address already in use" in str(ex):
 			log.error(f"Port {port_number} is already in use. Please choose a different port.")
 		else:
-			raise ex
+			raise
 
 
 async def _dispatch_redis_command(request_type: str, request_content: str) -> None:
@@ -448,7 +448,7 @@ async def redis_command_listener() -> None:
 	from btu_scheduler.lib.btu_rq import create_connection
 
 	redis_conn = create_connection()
-	loop = asyncio.get_event_loop()
+	loop = asyncio.get_running_loop()
 
 	log.info(f"Redis RPC command listener started, monitoring queue '{REDIS_COMMAND_QUEUE}'.")
 

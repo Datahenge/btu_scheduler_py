@@ -91,5 +91,5 @@ async def main():
 
 		# Wait until all tasks are concluded (forever)
 		log.info(f"All tasks have completed now: {task1.result()}, {task2.result()}, {task3.result()}")
-	except Exception as ex:
-		raise ex
+	except Exception:
+		raise
