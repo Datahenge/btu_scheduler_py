@@ -3,7 +3,6 @@
 import asyncio
 
 import btu_py
-from btu_py.lib import config
 from btu_py.lib.scheduler import queue_full_refill
 from btu_py.lib.tests import test_redis, test_sql
 from btu_py.lib.utils import is_port_in_use

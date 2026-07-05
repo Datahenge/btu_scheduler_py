@@ -1,7 +1,5 @@
 """btu_py/lib/tests.py"""
 
-import btu_py
-
 
 def test_redis():
 	"""

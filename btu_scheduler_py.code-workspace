@@ -27,7 +27,7 @@
 			".venv": true,
 			".ipynb_checkpoints": true
 		},
-		"python.defaultInterpreterPath": "pyvenv.d/bin/python",
+		"python.defaultInterpreterPath": ".venv/bin/python",
 		"[python]": {
 			"editor.defaultFormatter": "charliermarsh.ruff",
 			"editor.formatOnSave": true,
