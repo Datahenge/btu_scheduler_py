@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from datetime import datetime as DateTimeType
-from typing import Union
 from zoneinfo import ZoneInfo
 
 import requests
@@ -13,7 +12,6 @@ from btu_scheduler.lib.config import load_config
 from btu_scheduler.lib.sql import get_task_by_id, get_task_schedule_by_id
 from btu_scheduler.lib.utils import get_frappe_base_url
 
-NoneType = type(None)
 log = structlog.get_logger(__name__)
 
 
@@ -22,12 +20,12 @@ class BtuTask:
 	task_key: str
 	desc_short: str
 	desc_long: str
-	arguments: Union[NoneType, str]
+	arguments: str | None
 	path_to_function: str  # example:  btu.manual_tests.ping_with_wait
 	max_task_duration: int  # example:  600 seconds
 
 	@staticmethod
-	async def init_from_task_key(task_key: str):
+	async def init_from_task_key(task_key: str) -> "BtuTask":
 		task_data: dict = await get_task_by_id(task_key)  # read from the SQL Database
 		if not task_data:
 			raise IOError(f"No SQL row returned by get_task_by_id() for primary key = '{task_key}'")
@@ -49,14 +47,14 @@ class BtuTaskSchedule:
 	task_description: str
 	enabled: bool
 	queue_name: str
-	argument_overrides: Union[NoneType, str]
+	argument_overrides: str | None
 	schedule_description: str
 	cron_string: str
 	cron_timezone: ZoneInfo
-	redis_job_id: Union[NoneType, str] = None  # Not all schedules will have a Redis Job yet
+	redis_job_id: str | None = None  # Not all schedules will have a Redis Job yet
 
 	@staticmethod
-	async def init_from_schedule_key(schedule_key: str) -> object:
+	async def init_from_schedule_key(schedule_key: str) -> "BtuTaskSchedule":
 		schedule_data: dict = await get_task_schedule_by_id(schedule_key)  # read from the SQL Database
 		if not schedule_data:
 			raise IOError(f"No SQL row returned by get_task_schedule_by_id() for primary key = '{schedule_key}'")

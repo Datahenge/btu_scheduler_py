@@ -1,5 +1,6 @@
 """btu_scheduler/lib/scheduler.py"""
 
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime as DateTimeType
 from zoneinfo import ZoneInfo
@@ -216,7 +217,7 @@ def fetch_task_schedules_ready_for_rq(sched_before_unix_time: int) -> list:
 	return task_schedules_to_enqueue
 
 
-async def check_and_run_eligible_task_schedules(internal_queue: object):
+async def check_and_run_eligible_task_schedules(internal_queue: asyncio.Queue[str]):
 	"""
 	Examine the Next Execution Time for all scheduled RQ Jobs (this information is stored in RQ as a Unix timestamps)
 	If the Next Execution Time is in the past?  Then place the RQ Job into the appropriate queue.  RQ and Workers take over from there.
@@ -231,7 +232,7 @@ async def check_and_run_eligible_task_schedules(internal_queue: object):
 		await run_immediate_scheduled_task(task_schedule_instance, internal_queue)
 
 
-async def run_immediate_scheduled_task(task_schedule_instance: RQScheduledTask, internal_queue: object):
+async def run_immediate_scheduled_task(task_schedule_instance: RQScheduledTask, internal_queue: asyncio.Queue[str]):
 	"""
 	Create a Python RQ Task and assign to a Queue, so the next available worker can run it.
 	"""
@@ -365,7 +366,7 @@ def clear_all_scheduled_tasks() -> bool:
 	return True
 
 
-async def queue_full_refill(internal_queue: object) -> int:
+async def queue_full_refill(internal_queue: asyncio.Queue[str]) -> int:
 	"""
 	Queries the Frappe database, adding every active Task Schedule to BTU internal queue.
 	"""

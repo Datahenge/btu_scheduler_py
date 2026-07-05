@@ -1,17 +1,11 @@
 """btu_scheduler/lib/btu_cron.py"""
 
-from __future__ import (
-	annotations,
-)  # Defers evalulation of type annotations; hopefully unnecessary once Python 3.14 is released.
-
 from dataclasses import dataclass
 from datetime import datetime as DateTimeType
 from zoneinfo import ZoneInfo
 
 # Third Party
 from croniter import croniter
-
-NoneType = type(None)
 
 
 @dataclass
@@ -20,13 +14,13 @@ class CronStruct:
 	A cron expression consisting of 7 elements.
 	"""
 
-	second: [str, NoneType]
-	minute: [str, NoneType]
-	hour: [str, NoneType]
-	day_of_month: [str, NoneType]
-	month: [str, NoneType]
-	day_of_week: [str, NoneType]
-	year: [str, NoneType]
+	second: str | None
+	minute: str | None
+	hour: str | None
+	day_of_month: str | None
+	month: str | None
+	day_of_week: str | None
+	year: str | None
 
 	def to_string(self) -> str:
 		"""
@@ -63,8 +57,8 @@ class CronStruct:
 		)
 
 	@staticmethod
-	def from_string(cron_string: str) -> CronStruct:
-		def nonwildcard_or_none(element: str) -> [str, NoneType]:
+	def from_string(cron_string: str) -> "CronStruct":
+		def nonwildcard_or_none(element: str) -> str | None:
 			return None if element == "*" else element
 
 		cron7_expression: str = cron_str_to_cron_str7(cron_string)
@@ -112,8 +106,8 @@ def cron_str_to_cron_str7(cron_expression_string: str) -> str:
 
 def tz_cron_to_utc_datetimes(
 	cron_expression_string: str,
-	cron_timezone: [str, ZoneInfo],
-	from_utc_datetime: [DateTimeType, NoneType],
+	cron_timezone: str | ZoneInfo,
+	from_utc_datetime: DateTimeType | None,
 	number_of_results: int = 1,
 ) -> list[DateTimeType]:
 	"""

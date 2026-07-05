@@ -41,7 +41,7 @@ def get_tcp_socket_port() -> int:
 	return load_config().tcp_socket_port
 
 
-async def internal_queue_consumer(shared_queue):
+async def internal_queue_consumer(shared_queue: asyncio.Queue[str]) -> None:
 	"""
 	Reads TSIKs from the internal couroutine Queue, and adds them to Python RQ.
 	"""
@@ -66,7 +66,7 @@ async def internal_queue_consumer(shared_queue):
 		await asyncio.sleep(1)  # blocking request for just a moment
 
 
-async def internal_queue_producer(shared_queue):
+async def internal_queue_producer(shared_queue: asyncio.Queue[str]) -> None:
 	"""
 	Every N seconds, refill the Internal Queue with -all- Task Schedule IDs.
 
@@ -96,7 +96,7 @@ async def internal_queue_producer(shared_queue):
 		await asyncio.sleep(1)  # blocking request, yields controls to another coroutine for a while.
 
 
-async def review_next_execution_times(shared_queue):
+async def review_next_execution_times(shared_queue: asyncio.Queue[str]) -> None:
 	"""
 	----------------
 	Thread #3:  Enqueue Tasks into RQ
