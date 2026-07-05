@@ -1099,12 +1099,12 @@ wheels = [
 ]
 
 [[package]]
-name = "tomli-w"
-version = "1.2.0"
+name = "tomlkit"
+version = "0.15.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/19/75/241269d1da26b624c0d5e110e8149093c759b7a286138f4efd61a60e75fe/tomli_w-1.2.0.tar.gz", hash = "sha256:2dd14fac5a47c27be9cd4c976af5a12d87fb1f0b4512f81d69cce3b35ae25021", size = 7184, upload-time = "2025-01-15T12:07:24.262Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/51/db/03eaf4331631ef6b27d6e3c9b68c54dc6f0d63d87201fed600cc409307fd/tomlkit-0.15.0.tar.gz", hash = "sha256:7d1a9ecba3086638211b13814ea79c90dd54dd11993564376f3aa92271f5c7a3", size = 161875, upload-time = "2026-05-10T07:38:22.245Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c7/18/c86eb8e0202e32dd3df50d43d7ff9854f8e0603945ff398974c1d91ac1ef/tomli_w-1.2.0-py3-none-any.whl", hash = "sha256:188306098d013b691fcadc011abd66727d3c414c571bb01b1a174ba8c983cf90", size = 6675, upload-time = "2025-01-15T12:07:22.074Z" },
+    { url = "https://files.pythonhosted.org/packages/6a/43/8bd850ee71a191bf072e31302c73a66be413fecdd98fdcd111ecbcce13ca/tomlkit-0.15.0-py3-none-any.whl", hash = "sha256:4dbc8f0fc024412b57ced8757ac7461305126a648ff8c2c807fcb8e133a78738", size = 41328, upload-time = "2026-05-10T07:38:23.517Z" },
 ]
 
 [[package]]
@@ -1195,15 +1195,15 @@ wheels = [
 
 [[package]]
 name = "ventwig"
-version = "0.1.0"
+version = "0.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "tomli-w" },
+    { name = "tomlkit" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ef/a5/647aa37bb6dbefabe1c7b0f0d541036e251020f1fc36d13445b22bda2ac6/ventwig-0.1.0.tar.gz", hash = "sha256:f2b1ca0c9c926b84a0899eb88d83d62c680414939eca9cf87d5c1109bd05c481", size = 49419, upload-time = "2026-07-04T21:39:08.908Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/60/c2/a29037ff76ba6d8e4379b59651b849a69b21062f7f09a247cb104f4bcc7b/ventwig-0.2.0.tar.gz", hash = "sha256:1b04914cc960746497497e9072c7e9e876be4b8bc7290783b1c7de5b428393d6", size = 52129, upload-time = "2026-07-05T19:29:24.253Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d3/67/4bf616eb5a813c5dfa785d51d81cfa6213a9d036b7407f293e2736fada02/ventwig-0.1.0-py3-none-any.whl", hash = "sha256:8950f39134ff42205d96973443430116c48b2261d99a83b226f4c373e4da9e02", size = 10082, upload-time = "2026-07-04T21:39:07.655Z" },
+    { url = "https://files.pythonhosted.org/packages/8a/3a/6f99122e27fe7919c011c4804ba35074f0d4b8e20b6a7834e04a6759bb4d/ventwig-0.2.0-py3-none-any.whl", hash = "sha256:bc2aaa53b8b143ee878be37546a61deb417e738be6d269b3950b661821fff102", size = 12427, upload-time = "2026-07-05T19:29:22.929Z" },
 ]
 
 [[package]]

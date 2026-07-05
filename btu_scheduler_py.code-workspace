@@ -25,6 +25,8 @@
 			"**/*.egg-info": true,
 			"pyvenv.d": true,
 			".venv": true,
+			".ruff_cache": true,
+			".uv-cache": true,
 			".ipynb_checkpoints": true
 		},
 		"python.defaultInterpreterPath": ".venv/bin/python",
