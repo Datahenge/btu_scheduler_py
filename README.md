@@ -67,6 +67,10 @@ btu-py config edit    # open .env in $EDITOR
 btu-py run-daemon
 ```
 
+### Development
+
+See [docs/technical/01-ventwig.md](docs/technical/01-ventwig.md) for vendoring notes and [docs/technical/02-dev-commands.md](docs/technical/02-dev-commands.md) for common `uv`, `ruff`, and `ventwig` commands.
+
 ### Regarding Croniter
 https://pypi.org/project/croniter/
 
