@@ -56,7 +56,7 @@ def _require_config(load_fn):
 )
 def entry_point(verbose):
 	"""
-	CLI interface for BTU: Python Edition
+	CLI interface for BTU Scheduler
 	"""
 	if verbose:
 		global VERBOSE_MODE
@@ -75,8 +75,8 @@ def cmd_about():
 	About the btu-scheduler application.
 	"""
 	click.echo(f"btu-scheduler version {__version__}")
-	click.echo("Copyright (C) 2025")
-	click.echo("A Python-based alternative to the original BTU Scheduler.")
+	click.echo("Copyright (C) 2025-2026")
+	click.echo("BTU Scheduler is a background daemon for creating RQ Jobs from BTU Task Schedules.")
 
 
 @entry_point.command("config")
@@ -127,14 +127,10 @@ def cli_list_scheduled_tasks():
 
 
 @entry_point.command("run-daemon")
-@click.option("--debug", is_flag=True, default=False, help="Throw exceptions to help debugging.")
-def cli_run_daemon(debug):
+def cli_run_daemon():
 	"""
 	Run the BTU scheduler daemon.
 	"""
-	if debug:
-		click.echo("TODO: Change the logger to Debug Mode.")
-
 	from btu_scheduler.daemon import main
 
 	asyncio.run(main())

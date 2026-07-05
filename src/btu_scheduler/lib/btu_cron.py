@@ -11,8 +11,6 @@ from zoneinfo import ZoneInfo
 # Third Party
 from croniter import croniter
 
-from btu_scheduler.lib.config import load_config
-
 NoneType = type(None)
 
 
@@ -133,7 +131,7 @@ def tz_cron_to_utc_datetimes(
 	"""
 
 	if not cron_timezone:
-		cron_timezone = load_config().timezone()
+		raise ValueError("cron_timezone is required; each BTU Task Schedule record must supply its own timezone.")
 	elif isinstance(cron_timezone, str):
 		cron_timezone = ZoneInfo(cron_timezone)
 

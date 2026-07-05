@@ -83,7 +83,7 @@ class BtuTaskSchedule:
 			argument_overrides=schedule_data["argument_overrides"],
 			schedule_description=schedule_data["schedule_description"],
 			cron_string=schedule_data["cron_string"],
-			cron_timezone=schedule_data["cron_timezone"],
+			cron_timezone=ZoneInfo(schedule_data["cron_timezone"]),
 		)
 
 	async def to_rq_job_wrapper(self):

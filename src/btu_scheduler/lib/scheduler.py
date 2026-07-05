@@ -7,7 +7,6 @@ from zoneinfo import ZoneInfo
 import structlog
 
 from btu_scheduler.lib.btu_rq import create_connection
-from btu_scheduler.lib.config import load_config
 from btu_scheduler.lib.sql import get_enabled_task_schedules
 from btu_scheduler.lib.structs import BtuTaskSchedule
 
@@ -90,13 +89,6 @@ class RQScheduledTask:
 	def sort_list_by_next_datetime(list_of_rq_scheduled_task) -> list:
 		return sorted(list_of_rq_scheduled_task, key=lambda x: x.next_execution_as_unix_timestamp)
 
-	def next_execution_as_datetime_local(self):
-		"""
-		Returns the Next Execution Datetime in the local time zone.
-		"""
-		return self.next_execution_as_datetime_utc.astimezone(load_config().timezone())
-
-
 def add_task_schedule_to_rq(task_schedule: BtuTaskSchedule):
 	"""
 	Developer Notes:
@@ -171,14 +163,12 @@ def add_task_schedule_to_rq(task_schedule: BtuTaskSchedule):
 		messages.append(
 			f"Next Execution Time (UTC) for Task Schedule {task_schedule.id} = {rq_scheduled_task.next_execution_as_datetime_utc}"
 		)
-		# If application configuration has a good Time Zone string, print Next Execution Time in local time...
-		if load_config().timezone():
-			next_execution_time_local = rq_scheduled_task.next_execution_as_datetime_utc.astimezone(
-				load_config().timezone()
-			)
-			messages.append(
-				f"Next Execution Time ({load_config().timezone()}) for Task Schedule {task_schedule.id} = {next_execution_time_local}"
-			)
+		next_execution_time_local = rq_scheduled_task.next_execution_as_datetime_utc.astimezone(
+			task_schedule.cron_timezone
+		)
+		messages.append(
+			f"Next Execution Time ({task_schedule.cron_timezone}) for Task Schedule {task_schedule.id} = {next_execution_time_local}"
+		)
 		for each_message in messages:
 			log.debug(each_message)
 
@@ -333,8 +323,7 @@ def rq_cancel_scheduled_task(task_schedule_id: str) -> tuple:
 def rq_print_scheduled_tasks(to_stdout: bool):
 	tasks: list[RQScheduledTask] = rq_get_scheduled_tasks()
 	for result in sorted(tasks, key=lambda x: x.task_schedule_id):
-		next_datetime_local = result.next_execution_as_datetime_local()
-		message: str = f"Task Schedule {result.task_schedule_id} is scheduled to occur later at {next_datetime_local}"
+		message: str = f"Task Schedule {result.task_schedule_id} is scheduled to occur later at {result.next_execution_as_datetime_utc}"
 		if to_stdout:
 			print(f"{message}")
 		else:

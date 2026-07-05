@@ -1,7 +1,6 @@
 import pathlib
 import urllib.parse
 from typing import Literal
-from zoneinfo import ZoneInfo
 
 import structlog
 from platformdirs import user_config_dir
@@ -23,7 +22,6 @@ class SchedulerSettings(XdgSettings):
 
 	full_refresh_internal_secs: int
 	scheduler_polling_interval: int
-	time_zone_string: str
 	sql_type: Literal["postgres", "mariadb"]
 	sql_host: str
 	sql_port: int
@@ -81,10 +79,6 @@ class SchedulerSettings(XdgSettings):
 			else:
 				raise ValueError(f"Unsupported sql_type: {self.sql_type}. Supported types: 'postgres', 'mariadb'")
 		return self._sql_connection_string
-
-	def timezone(self) -> ZoneInfo:
-		return ZoneInfo(self.time_zone_string)
-
 
 def bootstrap_scheduler(*, handle_signals: bool = False) -> tuple[SchedulerSettings, structlog.stdlib.BoundLogger]:
 	global _settings  # noqa: PLW0603
