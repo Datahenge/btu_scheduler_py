@@ -1,13 +1,13 @@
-"""btu_py/daemon/couroutines.py"""
+"""btu_scheduler/daemon/couroutines.py"""
 
 import asyncio
 import json
 
-import btu_py
-from btu_py import get_logger
-from btu_py.lib import scheduler
-from btu_py.lib.structs import BtuTaskSchedule
-from btu_py.lib.utils import Stopwatch
+import btu_scheduler
+from btu_scheduler import get_logger
+from btu_scheduler.lib import scheduler
+from btu_scheduler.lib.structs import BtuTaskSchedule
+from btu_scheduler.lib.utils import Stopwatch
 
 # Redis key where incoming commands are delivered from the Frappe web server.
 # Must match REDIS_COMMAND_QUEUE in btu/btu_api/scheduler.py.
@@ -35,7 +35,7 @@ def get_tcp_socket_port() -> int:
 	"""
 	Get the TCP socket port from the configuration.
 	"""
-	return btu_py.get_config_data().tcp_socket_port
+	return btu_scheduler.get_config_data().tcp_socket_port
 
 
 async def internal_queue_consumer(shared_queue):
@@ -74,20 +74,20 @@ async def internal_queue_producer(shared_queue):
 	As the queue is filled, Thread 1 handles consuming and procesing each TSIK.
 	"""
 
-	btu_py.get_logger().info("Initializing coroutine 'internal_queue_producer()' ...")
+	btu_scheduler.get_logger().info("Initializing coroutine 'internal_queue_producer()' ...")
 	stopwatch = Stopwatch()
 	while True:
 		elapsed_seconds = stopwatch.get_elapsed_seconds_total()  # calculate elapsed seconds since last Queue Repopulate
-		if elapsed_seconds > btu_py.get_config_data().full_refresh_internal_secs:  # If sufficient time has passed ...
-			btu_py.get_logger().debug(
+		if elapsed_seconds > btu_scheduler.get_config_data().full_refresh_internal_secs:  # If sufficient time has passed ...
+			btu_scheduler.get_logger().debug(
 				f"Producer: {elapsed_seconds} seconds have elapsed.  Time for a full-write of Task Schedule Keys in Redis!"
 			)
 			result = await scheduler.queue_full_refill(shared_queue)
 			if result:
-				btu_py.get_logger().debug(f"  * Internal queue contains a total of {shared_queue.qsize()} values.")
+				btu_scheduler.get_logger().debug(f"  * Internal queue contains a total of {shared_queue.qsize()} values.")
 				scheduler.rq_print_scheduled_tasks(False)  # log the Task Schedule:
 			else:
-				btu_py.get_logger().warning(
+				btu_scheduler.get_logger().warning(
 					"No Task Schedules found in the database.  Unable to repopulate the internal queue."
 				)
 			stopwatch.reset()  # reset the stopwatch and begin a new countdown
@@ -105,11 +105,11 @@ async def review_next_execution_times(shared_queue):
 	  ----------------
 	"""
 	await asyncio.sleep(5)  # One-time delay of execution: this gives the other coroutines a chance to initialize.
-	btu_py.get_logger().info(
+	btu_scheduler.get_logger().info(
 		"Starting coroutine review_next_execution_times(), adding eligible RQ Jobs to RQ Queues at the appropriate time."
 	)
 	while True:
-		btu_py.get_logger().debug("Thread 3: Attempting to add new Jobs to RQ...")
+		btu_scheduler.get_logger().debug("Thread 3: Attempting to add new Jobs to RQ...")
 		# This thread requires a lock on the Internal Queue, so that after a Task runs, it can be rescheduled.
 		stopwatch = Stopwatch()
 		await scheduler.check_and_run_eligible_task_schedules(shared_queue)
@@ -117,7 +117,7 @@ async def review_next_execution_times(shared_queue):
 		# I want this thread to execute at roughly the same interval.
 		# By subtracting the Time Elapsed above, from the desired Wait Time, we know how much longer the thread should sleep.
 		await asyncio.sleep(
-			btu_py.get_config().scheduler_polling_interval - elapsed_seconds
+			btu_scheduler.get_config().scheduler_polling_interval - elapsed_seconds
 		)  # wait N seconds before trying again.
 
 
@@ -418,7 +418,7 @@ async def _dispatch_redis_command(request_type: str, request_content: str) -> No
 
 	if request_type == "cancel_task_schedule":
 		try:
-			from btu_py.lib import scheduler
+			from btu_scheduler.lib import scheduler
 			scheduler.rq_cancel_scheduled_task(request_content)
 			scheduler.rq_print_scheduled_tasks(to_stdout=False)
 			get_logger().info(f"Redis RPC: cancelled Task Schedule '{request_content}'.")
@@ -445,7 +445,7 @@ async def redis_command_listener() -> None:
 
 	See docs/scheduler_redis_rpc.md for the full protocol description.
 	"""
-	from btu_py.lib.btu_rq import create_connection
+	from btu_scheduler.lib.btu_rq import create_connection
 
 	redis_conn = create_connection()
 	loop = asyncio.get_event_loop()

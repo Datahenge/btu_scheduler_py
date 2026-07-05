@@ -1,4 +1,4 @@
-"""btu_py/lib/structs/__init__.py"""
+"""btu_scheduler/lib/structs/__init__.py"""
 
 from dataclasses import dataclass
 from datetime import datetime as DateTimeType
@@ -7,12 +7,12 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-from btu_py import get_config_data, get_logger
-from btu_py.lib import btu_cron
-from btu_py.lib.btu_rq import RQJobWrapper
-from btu_py.lib.sql import get_task_by_id, get_task_schedule_by_id
-from btu_py.lib.structs.sanchez import get_pickled_function_from_web
-from btu_py.lib.utils import get_frappe_base_url
+from btu_scheduler import get_config_data, get_logger
+from btu_scheduler.lib import btu_cron
+from btu_scheduler.lib.btu_rq import RQJobWrapper
+from btu_scheduler.lib.sql import get_task_by_id, get_task_schedule_by_id
+from btu_scheduler.lib.structs.sanchez import get_pickled_function_from_web
+from btu_scheduler.lib.utils import get_frappe_base_url
 
 NoneType = type(None)
 

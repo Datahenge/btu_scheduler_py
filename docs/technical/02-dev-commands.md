@@ -10,7 +10,7 @@ Create or sync the project environment:
 uv sync
 ```
 
-Include development tools such as `ruff`, `twine`, and `ventwig`:
+Include development tools such as `pytest`, `ruff`, `twine`, and `ventwig`:
 
 ```bash
 uv sync --extra development
@@ -27,22 +27,22 @@ UV_CACHE_DIR=.uv-cache uv sync
 Run the installed console command:
 
 ```bash
-uv run btu-py
+uv run btu-scheduler
 uv run btu
 ```
 
 Run common CLI commands:
 
 ```bash
-uv run btu-py config show
-uv run btu-py config path
-uv run btu-py config edit
+uv run btu-scheduler config show
+uv run btu-scheduler config path
+uv run btu-scheduler config edit
 ```
 
 Run the daemon:
 
 ```bash
-uv run btu-py run-daemon
+uv run btu-scheduler run-daemon
 ```
 
 ## Lint
@@ -85,13 +85,13 @@ uv sync --extra development
 Verify that imports resolve from the `src` layout:
 
 ```bash
-uv run python -c "import btu_py; print(btu_py.__file__)"
+uv run python -c "import btu_scheduler; print(btu_scheduler.__file__)"
 ```
 
 The expected path should start with:
 
 ```text
-src/btu_py/
+src/btu_scheduler/
 ```
 
 Check setuptools package discovery:
@@ -102,7 +102,7 @@ uv run python -c "from setuptools import find_packages; print(find_packages(wher
 
 ## Notes
 
-- Runtime package code lives under `src/btu_py/`.
-- Vendored runtime code belongs under `src/btu_py/_vendor/`.
+- Runtime package code lives under `src/btu_scheduler/`.
+- Vendored runtime code belongs under `src/btu_scheduler/_vendor/`.
 - This project uses normal package discovery, so package directories should include explicit `__init__.py` files.
 - The `development` optional dependency group is enabled with `uv` using `--extra development`.

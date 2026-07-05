@@ -1,11 +1,11 @@
 """
-Unit tests for btu_py.lib.btu_cron.tz_cron_to_utc_datetimes().
+Unit tests for btu_scheduler.lib.btu_cron.tz_cron_to_utc_datetimes().
 
-Run with:  python -m pytest btu_py/tests/test_btu_cron.py -v
+Run with:  python -m pytest btu_scheduler/tests/test_btu_cron.py -v
            (from the btu_scheduler_py project root, with dependencies installed)
 
 All tests supply cron_timezone and from_utc_datetime explicitly, so no
-btu_py configuration file or running services are required.
+btu_scheduler configuration file or running services are required.
 
 US Eastern DST dates used below:
   Spring forward: 2026-03-08  2:00 AM EST → 3:00 AM EDT  (7:00 UTC)
@@ -16,7 +16,7 @@ import unittest
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from btu_py.lib.btu_cron import tz_cron_to_utc_datetimes
+from btu_scheduler.lib.btu_cron import tz_cron_to_utc_datetimes
 
 UTC     = ZoneInfo("UTC")
 EASTERN = ZoneInfo("America/New_York")

@@ -9,10 +9,10 @@ package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = [ "src" ]
-include = [ "btu_py*" ]
+include = [ "btu_scheduler*" ]
 
 [project]
-name = "btu_py"
+name = "btu-scheduler"
 version = "1.0.0"
 description = "A BTU scheduler tool written in Python."
 readme = "README.md"
@@ -34,17 +34,19 @@ dependencies = [
 	"requests==2.32.5",
  	"rq==1.15.1",  # Keeping this pinned to Frappe Framework v15 version of rq
 	"pydantic-settings>=2.0.0",
+	"platformdirs>=4.0.0",
 	"python-dotenv>=1.0.0",
  	"slack_sdk~=3.31.0",
+	"structlog>=24.0.0",
     "temporal_lib>=0.1.2",
 ]
 
 [project.optional-dependencies]
-development = ["twine", "ruff>=0.14.0", "ventwig"]
+development = ["twine", "pytest", "ruff>=0.14.0", "ventwig"]
 
 [project.scripts]
-btu-py = "btu_py.cli:entry_point"
-btu = "btu_py.cli:entry_point"
+btu-scheduler = "btu_scheduler.cli:entry_point"
+btu = "btu_scheduler.cli:entry_point"
 
 [tool.ruff]
 line-length = 120  # Default is 88
@@ -54,7 +56,7 @@ indent-style = "tab"
 
 [[tool.ventwig.sources]]
 name          = "brian_appkit"
-local_path    = "src/btu_py/_vendor/config_logging"
+local_path    = "src/btu_scheduler/_vendor/config_logging"
 upstream      = "https://github.com/brian-pond/brian_appkit_config_py.git"
 upstream_path = "src/brian_appkit"    # optional — defaults to repo root
 ref           = "main"          # branch name or tag

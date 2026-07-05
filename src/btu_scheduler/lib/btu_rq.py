@@ -1,4 +1,4 @@
-"""btu_py/lib/btu_rq.py"""
+"""btu_scheduler/lib/btu_rq.py"""
 
 # NOTE: Deliberately naming this "btu_rq" to distinguish from the Third Party library namespace "rq"
 
@@ -16,7 +16,7 @@ import redis
 import rq
 
 # BTU
-from btu_py import get_config, get_config_data, get_logger
+from btu_scheduler import get_config, get_config_data, get_logger
 
 NoneType = type(None)
 

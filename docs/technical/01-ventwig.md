@@ -14,7 +14,7 @@ BTU Scheduler uses a `src` layout:
 
 ```text
 src/
-  btu_py/
+  btu_scheduler/
     _vendor/
       config_logging/
 ```
@@ -22,7 +22,7 @@ src/
 Vendored Python package code belongs under:
 
 ```text
-src/btu_py/_vendor/
+src/btu_scheduler/_vendor/
 ```
 
 The current `ventwig` source is configured in `pyproject.toml`:
@@ -30,7 +30,7 @@ The current `ventwig` source is configured in `pyproject.toml`:
 ```toml
 [[tool.ventwig.sources]]
 name          = "brian_appkit"
-local_path    = "src/btu_py/_vendor/config_logging"
+local_path    = "src/btu_scheduler/_vendor/config_logging"
 upstream      = "https://github.com/brian-pond/brian_appkit_config_py.git"
 upstream_path = "src/brian_appkit"
 ref           = "main"
@@ -46,7 +46,7 @@ package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = [ "src" ]
-include = [ "btu_py*" ]
+include = [ "btu_scheduler*" ]
 ```
 
 Normal package discovery expects explicit `__init__.py` files in package directories.
@@ -54,11 +54,11 @@ Normal package discovery expects explicit `__init__.py` files in package directo
 For vendored code, this means parent package marker files should exist:
 
 ```text
-src/btu_py/_vendor/__init__.py
-src/btu_py/_vendor/config_logging/__init__.py
+src/btu_scheduler/_vendor/__init__.py
+src/btu_scheduler/_vendor/config_logging/__init__.py
 ```
 
-If `src/btu_py/_vendor/__init__.py` is missing, setuptools normal package discovery may not include the vendored package in the built distribution.
+If `src/btu_scheduler/_vendor/__init__.py` is missing, setuptools normal package discovery may not include the vendored package in the built distribution.
 
 ## Runtime Dependencies
 

@@ -1,6 +1,6 @@
-"""btu_py/lib/utils.py"""
+"""btu_scheduler/lib/utils.py"""
 
-# NOTE: Functions here should not depend on other btu_py modules or namespaces.
+# NOTE: Functions here should not depend on other btu_scheduler modules or namespaces.
 
 import inspect
 import ssl
@@ -186,9 +186,9 @@ def utc_to_rq_string(datetime_utc: DateTimeType) -> str:
 
 
 def get_frappe_base_url() -> str:
-	import btu_py
+	import btu_scheduler
 
-	config_data = btu_py.get_config_data()
+	config_data = btu_scheduler.get_config_data()
 
 	if config_data.webserver_port == 443:
 		return f"https://{config_data.webserver_ip}"

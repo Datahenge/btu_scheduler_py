@@ -1,14 +1,14 @@
-"""btu_py/lib/scheduler.py"""
+"""btu_scheduler/lib/scheduler.py"""
 
 from dataclasses import dataclass
 from datetime import datetime as DateTimeType
 from zoneinfo import ZoneInfo
 
-import btu_py
-from btu_py import get_logger
-from btu_py.lib.btu_rq import create_connection
-from btu_py.lib.sql import get_enabled_task_schedules
-from btu_py.lib.structs import BtuTaskSchedule
+import btu_scheduler
+from btu_scheduler import get_logger
+from btu_scheduler.lib.btu_rq import create_connection
+from btu_scheduler.lib.sql import get_enabled_task_schedules
+from btu_scheduler.lib.structs import BtuTaskSchedule
 
 # static RQ_SCHEDULER_NAMESPACE_PREFIX: &'static str = "rq:scheduler_instance:";
 # static RQ_KEY_SCHEDULER: &'static str = "rq:scheduler";
@@ -92,7 +92,7 @@ class RQScheduledTask:
 		"""
 		Returns the Next Execution Datetime in the local time zone.
 		"""
-		return self.next_execution_as_datetime_utc.astimezone(btu_py.get_config().timezone())
+		return self.next_execution_as_datetime_utc.astimezone(btu_scheduler.get_config().timezone())
 
 
 def add_task_schedule_to_rq(task_schedule: BtuTaskSchedule):
@@ -170,12 +170,12 @@ def add_task_schedule_to_rq(task_schedule: BtuTaskSchedule):
 			f"Next Execution Time (UTC) for Task Schedule {task_schedule.id} = {rq_scheduled_task.next_execution_as_datetime_utc}"
 		)
 		# If application configuration has a good Time Zone string, print Next Execution Time in local time...
-		if btu_py.get_config().timezone():
+		if btu_scheduler.get_config().timezone():
 			next_execution_time_local = rq_scheduled_task.next_execution_as_datetime_utc.astimezone(
-				btu_py.get_config().timezone()
+				btu_scheduler.get_config().timezone()
 			)
 			messages.append(
-				f"Next Execution Time ({btu_py.get_config().timezone()}) for Task Schedule {task_schedule.id} = {next_execution_time_local}"
+				f"Next Execution Time ({btu_scheduler.get_config().timezone()}) for Task Schedule {task_schedule.id} = {next_execution_time_local}"
 			)
 		for each_message in messages:
 			get_logger().debug(each_message)
@@ -363,21 +363,21 @@ async def queue_full_refill(internal_queue: object) -> int:
 	"""
 	Queries the Frappe database, adding every active Task Schedule to BTU internal queue.
 	"""
-	# btu_py.get_logger().debug(f"  * before refill, the queue contains {internal_queue.qsize()} values.")
+	# btu_scheduler.get_logger().debug(f"  * before refill, the queue contains {internal_queue.qsize()} values.")
 	rows_added = 0
 	enabled_schedules = await get_enabled_task_schedules()
 	if not enabled_schedules:
-		btu_py.get_logger().debug("queue_full_refill() : No enabled Task Schedules found in the database.")
+		btu_scheduler.get_logger().debug("queue_full_refill() : No enabled Task Schedules found in the database.")
 		return 0
 
-	# btu_py.get_logger().debug(f"  * queue_full_refill() found {len(enabled_schedules)} enabled Task Schedules.")
+	# btu_scheduler.get_logger().debug(f"  * queue_full_refill() found {len(enabled_schedules)} enabled Task Schedules.")
 	for each_row in enabled_schedules:  # each_row is a dictionary with 2 keys: 'name' and 'desc_short'
 		await internal_queue.put(
 			each_row["schedule_key"]
 		)  # add the schedule_key ('name') of a BTU Task Schedule document.
 		rows_added += 1
 	if rows_added:
-		btu_py.get_logger().debug(f"  * filled internal queue with {rows_added} Task Schedule identifiers.")
+		btu_scheduler.get_logger().debug(f"  * filled internal queue with {rows_added} Task Schedule identifiers.")
 	return rows_added
 
 

@@ -1,6 +1,3 @@
-"""btu_py/lib/config.py"""
-
-import os
 import pathlib
 import pprint
 import urllib.parse
@@ -8,34 +5,27 @@ from functools import lru_cache
 from typing import Literal
 from zoneinfo import ZoneInfo
 
-from dotenv import load_dotenv
-from pydantic import field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+import structlog
+from platformdirs import user_config_dir
+from pydantic import Field, PrivateAttr, field_validator, model_validator
 
-from btu_py.lib.app_logger import build_new_logger
+from btu_scheduler._vendor.config_logging import LogLevel, XdgSettings, bootstrap_app
 
-config_home = pathlib.Path(os.environ.get("XDG_CONFIG_HOME", "~/.config")).expanduser()
-load_dotenv(config_home / "btu_scheduler" / ".env", override=False)
-
+APP_NAME = "btu-scheduler"
 _SECRET_FIELDS = frozenset({"sql_password", "webserver_token", "slack_webhook_url"})
 
 
 def get_env_file_path() -> pathlib.Path:
 	"""Return the path to the optional .env file."""
-	return config_home / "btu_scheduler" / ".env"
+	return pathlib.Path(user_config_dir(APP_NAME)) / ".env"
 
 
-class SchedulerSettings(BaseSettings):
-	model_config = SettingsConfigDict(
-		env_prefix="BTU_SCHEDULER_",
-		env_file=None,
-		extra="ignore",
-	)
+class SchedulerSettings(XdgSettings):
+	"""Validated BTU Scheduler settings loaded by the vendored bootstrap layer."""
 
 	full_refresh_internal_secs: int
 	scheduler_polling_interval: int
 	time_zone_string: str
-	tracing_level: str
 	sql_type: Literal["postgres", "mariadb"]
 	sql_host: str
 	sql_port: int
@@ -53,14 +43,31 @@ class SchedulerSettings(BaseSettings):
 	disable_tcp_socket: bool = False
 	webserver_host_header: str | None = None
 	slack_webhook_url: str | None = None
+	tracing_level: LogLevel | None = Field(
+		default=None,
+		description="Compatibility alias for log_level; prefer BTU_SCHEDULER_LOG_LEVEL.",
+	)
 
 	_sql_connection_string: str | None = None
-	_logger: object | None = None
+	_logger: structlog.stdlib.BoundLogger | None = PrivateAttr(default=None)
 
 	@field_validator("sql_type", mode="before")
 	@classmethod
 	def normalize_sql_type(cls, value: str) -> str:
 		return value.lower()
+
+	@field_validator("tracing_level", mode="before")
+	@classmethod
+	def normalize_tracing_level(cls, value: object) -> object:
+		if isinstance(value, str):
+			return value.upper()
+		return value
+
+	@model_validator(mode="after")
+	def apply_legacy_tracing_level(self):
+		if self.tracing_level is not None and self.log_level is LogLevel.INFO:
+			self.log_level = self.tracing_level
+		return self
 
 	def get_sql_type(self) -> str:
 		return self.sql_type
@@ -83,7 +90,7 @@ class SchedulerSettings(BaseSettings):
 
 	def get_logger(self):
 		if not self._logger:
-			self._logger = build_new_logger("btu_py", self.tracing_level)
+			self._logger = structlog.get_logger("btu_scheduler")
 		return self._logger
 
 	def timezone(self) -> ZoneInfo:
@@ -105,7 +112,15 @@ class SchedulerSettings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def load_config() -> SchedulerSettings:
-	return SchedulerSettings()
+	settings, _log = bootstrap_app(SchedulerSettings, app_name=APP_NAME, handle_signals=False)
+	return settings
+
+
+def load_config_with_signal_handlers() -> SchedulerSettings:
+	load_config.cache_clear()
+	settings, _log = bootstrap_app(SchedulerSettings, app_name=APP_NAME, handle_signals=True)
+	load_config.cache_clear()
+	return settings
 
 
 def reload_config() -> SchedulerSettings:

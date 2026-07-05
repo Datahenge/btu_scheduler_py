@@ -1,4 +1,4 @@
-"""btu_py/lib/btu_cron.py"""
+"""btu_scheduler/lib/btu_cron.py"""
 
 from __future__ import (
 	annotations,
@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 from croniter import croniter
 
 # BTU
-import btu_py
+import btu_scheduler
 
 NoneType = type(None)
 
@@ -134,7 +134,7 @@ def tz_cron_to_utc_datetimes(
 	"""
 
 	if not cron_timezone:
-		cron_timezone = btu_py.get_config().timezone()
+		cron_timezone = btu_scheduler.get_config().timezone()
 	elif isinstance(cron_timezone, str):
 		cron_timezone = ZoneInfo(cron_timezone)
 

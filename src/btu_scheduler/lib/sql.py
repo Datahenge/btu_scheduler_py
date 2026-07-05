@@ -1,8 +1,8 @@
-"""btu_py/lib/sql.py"""
+"""btu_scheduler/lib/sql.py"""
 
 from databases import Database
 
-from btu_py import get_config
+from btu_scheduler import get_config
 
 # Global database instance (initialized on first use)
 _database_instance: Database = None

@@ -1,11 +1,11 @@
-"""btu_py/lib/tests.py"""
+"""btu_scheduler/lib/tests.py"""
 
 
 def test_redis():
 	"""
 	Test the connection to the Redis database.
 	"""
-	from btu_py.lib.btu_rq import create_connection
+	from btu_scheduler.lib.btu_rq import create_connection
 
 	conn = create_connection()
 	return conn.ping()
@@ -15,8 +15,8 @@ async def test_sql(quiet=False):
 	"""
 	Test the connection to the Frappe database.
 	"""
-	from btu_py import get_config
-	from btu_py.lib.sql import _quote_identifier, get_database
+	from btu_scheduler import get_config
+	from btu_scheduler.lib.sql import _quote_identifier, get_database
 
 	def quote(x):
 		return _quote_identifier(x, get_config().get_sql_type())
@@ -34,8 +34,8 @@ def test_slack():
 
 	from slack_sdk import WebClient
 
-	from btu_py import get_config
-	from btu_py.lib.utils import get_datetime_string, send_message_to_slack
+	from btu_scheduler import get_config
+	from btu_scheduler.lib.utils import get_datetime_string, send_message_to_slack
 
 	# Test One
 	client = WebClient(ssl=ssl._create_unverified_context())
@@ -46,7 +46,7 @@ def test_slack():
 		print("\u2717 First failed.")
 
 	# Test Two
-	message = f"{get_datetime_string()} : This is a test initiated by the 'btu-py' CLI application.\nNothing to see here; move along!"
+	message = f"{get_datetime_string()} : This is a test initiated by the 'btu-scheduler' CLI application.\nNothing to see here; move along!"
 	try:
 		send_message_to_slack(get_config(), message)
 		print("\u2713 Second test successful.  Please examine Slack to find a test message.")
@@ -60,11 +60,11 @@ def test_frappe_ping(debug_mode=False):
 	"""
 	import requests
 
-	import btu_py
-	from btu_py.lib.utils import get_frappe_base_url
+	import btu_scheduler
+	from btu_scheduler.lib.utils import get_frappe_base_url
 
-	btu_py.initialize_shared_config()
-	config_data = btu_py.get_config_data()
+	btu_scheduler.initialize_shared_config()
+	config_data = btu_scheduler.get_config_data()
 
 	url = f"{get_frappe_base_url()}/api/method/btu.btu_api.endpoints.test_ping"
 	if debug_mode:
@@ -92,10 +92,10 @@ def test_pickler(debug_mode: bool = True):
 	import chardet
 	import requests
 
-	import btu_py
-	from btu_py.lib.utils import get_frappe_base_url
+	import btu_scheduler
+	from btu_scheduler.lib.utils import get_frappe_base_url
 
-	config_data = btu_py.get_config_data()
+	config_data = btu_scheduler.get_config_data()
 	url = f"{get_frappe_base_url()}/api/method/btu.btu_api.endpoints.test_function_ping_now_bytes"
 	headers = {
 		"Authorization": config_data.webserver_token,
@@ -159,7 +159,7 @@ def test_rq_hello_world():
 	"""
 	from rq import Queue
 
-	from btu_py.lib.btu_rq import create_connection
+	from btu_scheduler.lib.btu_rq import create_connection
 
 	# Create a new RQ Job.
 	q = Queue(
@@ -195,13 +195,13 @@ def _tcp_send_json_request(payload: dict) -> None:
 	import json as _json
 	import socket as _socket
 
-	import btu_py as _btu_py
-	from btu_py.lib.config import reload_config
+	import btu_scheduler as _btu_scheduler
+	from btu_scheduler.lib.config import reload_config
 
-	_btu_py.shared_config.set(reload_config())
+	_btu_scheduler.shared_config.set(reload_config())
 
-	host = _btu_py.get_config_data().webserver_ip
-	port = _btu_py.get_config_data().tcp_socket_port
+	host = _btu_scheduler.get_config_data().webserver_ip
+	port = _btu_scheduler.get_config_data().tcp_socket_port
 
 	sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
 	try:

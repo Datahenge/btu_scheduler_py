@@ -1,20 +1,20 @@
-"""btu_py/cli.py"""
+"""btu_scheduler/cli.py"""
 
 # Standard Library
 import asyncio
-import logging
 import os
 import subprocess
+import sys
 
 # Third Party
 import click
 
 # Package
-import btu_py
-from btu_py import __version__
+import btu_scheduler
+from btu_scheduler import __version__
+from btu_scheduler._vendor.config_logging import ConfigurationError
 
 VERBOSE_MODE = False
-logging.basicConfig(level=logging.ERROR)
 
 
 def _require_config(load_fn):
@@ -22,34 +22,10 @@ def _require_config(load_fn):
 	Call load_fn() and return the result. On failure, print a human-readable
 	message listing the missing BTU_SCHEDULER_* environment variables and exit.
 	"""
-	import sys
-
-	from pydantic import ValidationError
-
 	try:
 		return load_fn()
-	except ValidationError as exc:
-		missing = [err["loc"][0] for err in exc.errors() if err["type"] == "missing"]
-		other = [err for err in exc.errors() if err["type"] != "missing"]
-		print("Error: BTU Scheduler configuration is incomplete.")
-		if missing:
-			print("\nMissing required environment variables:")
-			for field in missing:
-				env_var = f"BTU_SCHEDULER_{field.upper()}"
-				print(f"  {env_var}")
-			env_path_hint = None
-			try:
-				from btu_py.lib.config import get_env_file_path
-
-				env_path_hint = get_env_file_path()
-			except Exception:
-				pass
-			print("\nSet these variables in your shell environment, or add them to the optional")
-			if env_path_hint:
-				print(f"  .env file at: {env_path_hint}")
-		for err in other:
-			field = err["loc"][0] if err["loc"] else "?"
-			print(f"  BTU_SCHEDULER_{str(field).upper()}: {err['msg']}")
+	except ConfigurationError as exc:
+		print(exc, file=sys.stderr)
 		sys.exit(1)
 
 
@@ -83,9 +59,9 @@ def entry_point(verbose):
 @entry_point.command("about")
 def cmd_about():
 	"""
-	About the btu-py application.
+	About the btu-scheduler application.
 	"""
-	print(f"btu-py version {__version__}")
+	print(f"btu-scheduler version {__version__}")
 	print("Copyright (C) 2025")
 	print("A Python-based alternative to the original BTU Scheduler.")
 
@@ -94,14 +70,14 @@ def cmd_about():
 @click.argument("command", type=click.Choice(["show", "edit", "path"], case_sensitive=False))
 def cmd_config(command):
 	"""
-	Configuration of btu-py CLI.
+	Configuration of btu-scheduler CLI.
 	"""
-	from btu_py.lib.config import get_env_file_path, load_config
+	from btu_scheduler.lib.config import get_env_file_path, load_config
 
 	match command.split():
 		case ["show"]:
-			btu_py.shared_config.set(_require_config(load_config))
-			btu_py.get_config().print_config()
+			btu_scheduler.shared_config.set(_require_config(load_config))
+			btu_scheduler.get_config().print_config()
 		case ["path"]:
 			print(get_env_file_path())
 		case ["edit"]:
@@ -120,7 +96,7 @@ def cli_clear_scheduled_tasks():
 	"""
 	Clear all scheduled tasks from the Redis database.
 	"""
-	from btu_py.lib.scheduler import clear_all_scheduled_tasks
+	from btu_scheduler.lib.scheduler import clear_all_scheduled_tasks
 
 	if clear_all_scheduled_tasks():
 		print("All scheduled tasks cleared from Redis database.")
@@ -133,7 +109,7 @@ def cli_list_scheduled_tasks():
 	"""
 	List Schedule IDs already in the scheduler queue.
 	"""
-	from btu_py.lib.scheduler import rq_print_scheduled_tasks
+	from btu_scheduler.lib.scheduler import rq_print_scheduled_tasks
 
 	rq_print_scheduled_tasks(to_stdout=True)
 
@@ -147,7 +123,7 @@ def cli_run_daemon(debug):
 	if debug:
 		print("TODO: Change the logger to Debug Mode.")
 
-	from btu_py.daemon import main
+	from btu_scheduler.daemon import main
 
 	asyncio.run(main())
 
@@ -184,7 +160,7 @@ def cli_test(command, task_schedule_id):
 		case "frappe-ping":
 			import requests
 
-			from btu_py.lib.tests import test_frappe_ping
+			from btu_scheduler.lib.tests import test_frappe_ping
 
 			try:
 				test_frappe_ping()
@@ -192,12 +168,12 @@ def cli_test(command, task_schedule_id):
 				print(ex)
 
 		case "pickler":
-			from btu_py.lib.tests import test_pickler
+			from btu_scheduler.lib.tests import test_pickler
 
 			test_pickler()
 
 		case "redis":
-			from btu_py.lib.tests import test_redis
+			from btu_scheduler.lib.tests import test_redis
 
 			try:
 				test_redis()
@@ -206,29 +182,29 @@ def cli_test(command, task_schedule_id):
 				print(f"Error: {ex}")
 
 		case "slack":
-			from btu_py.lib.tests import test_slack
+			from btu_scheduler.lib.tests import test_slack
 
 			test_slack()
 
 		case "sql":
-			from btu_py.lib.tests import test_sql
+			from btu_scheduler.lib.tests import test_sql
 
 			asyncio.run(test_sql(quiet=False))
 
 		case "tcp-echo":
-			from btu_py.lib.tests import test_tcp_socket_echo
+			from btu_scheduler.lib.tests import test_tcp_socket_echo
 
 			test_tcp_socket_echo()
 			print("TCP socket echo test completed.")
 
 		case "tcp-ping":
-			from btu_py.lib.tests import test_tcp_socket_ping
+			from btu_scheduler.lib.tests import test_tcp_socket_ping
 
 			test_tcp_socket_ping()
 			print("TCP socket ping test completed.")
 
 		case "tcp-create-task-schedule":
-			from btu_py.lib.tests import test_tcp_socket_create_task_schedule
+			from btu_scheduler.lib.tests import test_tcp_socket_create_task_schedule
 
 			if not task_schedule_id:
 				print("Error: You must provide a Task Schedule ID, e.g. 'btu test tcp-create-task-schedule TS-000123'.")
@@ -237,7 +213,7 @@ def cli_test(command, task_schedule_id):
 			print("TCP socket create_task_schedule test completed.")
 
 		case "tcp-cancel-task-schedule":
-			from btu_py.lib.tests import test_tcp_socket_cancel_task_schedule
+			from btu_scheduler.lib.tests import test_tcp_socket_cancel_task_schedule
 
 			if not task_schedule_id:
 				print("Error: You must provide a Task Schedule ID, e.g. 'btu test tcp-cancel-task-schedule TS-000123'.")
@@ -246,7 +222,7 @@ def cli_test(command, task_schedule_id):
 			print("TCP socket cancel_task_schedule test completed.")
 
 		case "test-rq-hello-world":
-			from btu_py.lib.tests import test_rq_hello_world
+			from btu_scheduler.lib.tests import test_rq_hello_world
 
 			test_rq_hello_world()
 
@@ -271,6 +247,3 @@ def cli_service_status():
 		"status",
 	]
 	subprocess.run(command_list, check=False, stderr=subprocess.STDOUT)
-
-
-

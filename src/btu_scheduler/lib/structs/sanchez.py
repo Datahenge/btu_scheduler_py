@@ -1,12 +1,12 @@
-"""btu_py/lib/structus/sanchez.py"""
+"""btu_scheduler/lib/structus/sanchez.py"""
 
 import json
 from typing import Union
 
 import requests
 
-from btu_py import get_config_data
-from btu_py.lib.utils import get_frappe_base_url
+from btu_scheduler import get_config_data
+from btu_scheduler.lib.utils import get_frappe_base_url
 
 NoneType = type(None)
 

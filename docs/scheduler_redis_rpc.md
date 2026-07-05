@@ -115,7 +115,7 @@ A `null` response (BLPOP timeout) means the scheduler did not respond within 5 s
 
 ## Disabling the Redis RPC listener
 
-Set `BTU_SCHEDULER_DISABLE_REDIS_RPC=true` in your environment (or `~/.config/btu_scheduler/.env`) to prevent the scheduler from starting the listener. This should only be needed for debugging.
+Set `BTU_SCHEDULER_DISABLE_REDIS_RPC=true` in your environment (or `~/.config/btu-scheduler/.env`) to prevent the scheduler from starting the listener. This should only be needed for debugging.
 
 ---
 

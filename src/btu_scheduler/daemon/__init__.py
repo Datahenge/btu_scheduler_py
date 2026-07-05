@@ -1,11 +1,11 @@
-"""btu_py/daemon/__init__.py"""
+"""btu_scheduler/daemon/__init__.py"""
 
 import asyncio
 
-import btu_py
-from btu_py.lib.scheduler import queue_full_refill
-from btu_py.lib.tests import test_redis, test_sql
-from btu_py.lib.utils import is_port_in_use
+import btu_scheduler
+from btu_scheduler.lib.scheduler import queue_full_refill
+from btu_scheduler.lib.tests import test_redis, test_sql
+from btu_scheduler.lib.utils import is_port_in_use
 
 
 async def main():
@@ -23,23 +23,23 @@ async def main():
 		tcp_socket_listener,
 	)
 
-	btu_py.initialize_shared_config()
-	btu_py.get_logger().debug("Initialized configuration in Main Thread.")
-	tcp_socket_enabled = not btu_py.get_config().disable_tcp_socket
-	redis_rpc_enabled = not btu_py.get_config().disable_redis_rpc
+	btu_scheduler.initialize_shared_config(handle_signals=True)
+	btu_scheduler.get_logger().debug("Initialized configuration in Main Thread.")
+	tcp_socket_enabled = not btu_scheduler.get_config().disable_tcp_socket
+	redis_rpc_enabled = not btu_scheduler.get_config().disable_redis_rpc
 
 	# Make sure Redis is available.
 	try:
 		test_redis()  # Synchronous function.
 	except Exception as ex:
-		btu_py.get_logger().error(f"Unable to connect to Frappe Redis queue: {ex}")
+		btu_scheduler.get_logger().error(f"Unable to connect to Frappe Redis queue: {ex}")
 		return
 
 	await test_sql(quiet=True)
 
 	# Make sure port 8888 is available
 	if tcp_socket_enabled and is_port_in_use(get_tcp_socket_port()):
-		btu_py.get_logger().error(f"Port {get_tcp_socket_port()} is already in use.")
+		btu_scheduler.get_logger().error(f"Port {get_tcp_socket_port()} is already in use.")
 		return
 
 	internal_queue = asyncio.Queue()
@@ -53,7 +53,7 @@ async def main():
 		"* Performs the role of a Scheduler, enqueuing BTU Task Schedules in Python RQ whenever it's time to run them."
 	)
 	print(
-		f"* Performs a full-refresh of BTU Task Schedules every {btu_py.get_config_data().full_refresh_internal_secs} seconds."
+		f"* Performs a full-refresh of BTU Task Schedules every {btu_scheduler.get_config_data().full_refresh_internal_secs} seconds."
 	)
 
 	# Redis RPC (primary control-plane)
@@ -93,6 +93,6 @@ async def main():
 				group.create_task(tcp_socket_listener(), name="TCP Socket Listener")
 
 		# Wait until all tasks are concluded (forever)
-		btu_py.get_logger().info(f"All tasks have completed now: {task1.result()}, {task2.result()}, {task3.result()}")
+		btu_scheduler.get_logger().info(f"All tasks have completed now: {task1.result()}, {task2.result()}, {task3.result()}")
 	except Exception as ex:
 		raise ex
