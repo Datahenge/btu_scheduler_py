@@ -3,18 +3,32 @@
 # Standard Library
 import asyncio
 import os
+import pprint
+import shlex
 import subprocess
-import sys
 
 # Third Party
 import click
 
-# Package
-import btu_scheduler
 from btu_scheduler import __version__
 from btu_scheduler._vendor.config_logging import ConfigurationError
 
 VERBOSE_MODE = False
+_SECRET_FIELDS = frozenset({"sql_password", "webserver_token", "slack_webhook_url"})
+
+
+def _redacted_config_dict(settings) -> dict:
+	data = settings.model_dump(mode="json")
+	for key in _SECRET_FIELDS:
+		if data.get(key):
+			data[key] = "***"
+	return data
+
+
+def _show_config(settings) -> None:
+	click.echo()
+	click.echo(pprint.pformat(_redacted_config_dict(settings), indent=4, compact=False))
+	click.echo()
 
 
 def _require_config(load_fn):
@@ -25,8 +39,7 @@ def _require_config(load_fn):
 	try:
 		return load_fn()
 	except ConfigurationError as exc:
-		print(exc, file=sys.stderr)
-		sys.exit(1)
+		raise click.ClickException(str(exc)) from exc
 
 
 # ========
@@ -61,9 +74,9 @@ def cmd_about():
 	"""
 	About the btu-scheduler application.
 	"""
-	print(f"btu-scheduler version {__version__}")
-	print("Copyright (C) 2025")
-	print("A Python-based alternative to the original BTU Scheduler.")
+	click.echo(f"btu-scheduler version {__version__}")
+	click.echo("Copyright (C) 2025")
+	click.echo("A Python-based alternative to the original BTU Scheduler.")
 
 
 @entry_point.command("config")
@@ -76,19 +89,18 @@ def cmd_config(command):
 
 	match command.split():
 		case ["show"]:
-			btu_scheduler.shared_config.set(_require_config(load_config))
-			btu_scheduler.get_config().print_config()
+			_show_config(_require_config(load_config))
 		case ["path"]:
-			print(get_env_file_path())
+			click.echo(get_env_file_path())
 		case ["edit"]:
 			env_path = get_env_file_path()
 			env_path.parent.mkdir(parents=True, exist_ok=True)
 			if not env_path.exists():
 				env_path.touch()
-			editor = os.environ.get("EDITOR", "/usr/bin/editor")
-			os.system(f"{editor} {env_path}")
+			editor = shlex.split(os.environ.get("EDITOR", "/usr/bin/editor"))
+			subprocess.run([*editor, str(env_path)], check=False)
 		case _:
-			print(f"Subcommand '{command}' not recognized.")
+			raise click.ClickException(f"Subcommand '{command}' not recognized.")
 
 
 @entry_point.command("clear-scheduled-tasks")
@@ -99,9 +111,9 @@ def cli_clear_scheduled_tasks():
 	from btu_scheduler.lib.scheduler import clear_all_scheduled_tasks
 
 	if clear_all_scheduled_tasks():
-		print("All scheduled tasks cleared from Redis database.")
+		click.echo("All scheduled tasks cleared from Redis database.")
 	else:
-		print("Error: Unable to clear scheduled tasks from Redis database.")
+		click.echo("Error: Unable to clear scheduled tasks from Redis database.")
 
 
 @entry_point.command("list-scheduled-tasks")
@@ -121,7 +133,7 @@ def cli_run_daemon(debug):
 	Run the BTU scheduler daemon.
 	"""
 	if debug:
-		print("TODO: Change the logger to Debug Mode.")
+		click.echo("TODO: Change the logger to Debug Mode.")
 
 	from btu_scheduler.daemon import main
 
@@ -160,75 +172,81 @@ def cli_test(command, task_schedule_id):
 		case "frappe-ping":
 			import requests
 
-			from btu_scheduler.lib.tests import test_frappe_ping
+			from btu_scheduler.lib.diagnostics import diagnose_frappe_ping
 
 			try:
-				test_frappe_ping()
+				diagnose_frappe_ping()
 			except requests.exceptions.ConnectionError as ex:
-				print(ex)
+				click.echo(ex)
 
 		case "pickler":
-			from btu_scheduler.lib.tests import test_pickler
+			from btu_scheduler.lib.diagnostics import diagnose_pickler
 
-			test_pickler()
+			diagnose_pickler()
 
 		case "redis":
-			from btu_scheduler.lib.tests import test_redis
+			from btu_scheduler.lib.diagnostics import diagnose_redis
 
 			try:
-				test_redis()
-				print("Redis connection successful.")
+				diagnose_redis()
+				click.echo("Redis connection successful.")
 			except Exception as ex:
-				print(f"Error: {ex}")
+				click.echo(f"Error: {ex}")
 
 		case "slack":
-			from btu_scheduler.lib.tests import test_slack
+			from btu_scheduler.lib.diagnostics import diagnose_slack
 
-			test_slack()
+			diagnose_slack()
 
 		case "sql":
-			from btu_scheduler.lib.tests import test_sql
+			from btu_scheduler.lib.diagnostics import diagnose_sql
 
-			asyncio.run(test_sql(quiet=False))
+			asyncio.run(diagnose_sql(quiet=False))
 
 		case "tcp-echo":
-			from btu_scheduler.lib.tests import test_tcp_socket_echo
+			from btu_scheduler.lib.diagnostics import diagnose_tcp_socket_echo
 
-			test_tcp_socket_echo()
-			print("TCP socket echo test completed.")
+			diagnose_tcp_socket_echo()
+			click.echo("TCP socket echo test completed.")
 
 		case "tcp-ping":
-			from btu_scheduler.lib.tests import test_tcp_socket_ping
+			from btu_scheduler.lib.diagnostics import diagnose_tcp_socket_ping
 
-			test_tcp_socket_ping()
-			print("TCP socket ping test completed.")
+			diagnose_tcp_socket_ping()
+			click.echo("TCP socket ping test completed.")
 
 		case "tcp-create-task-schedule":
-			from btu_scheduler.lib.tests import test_tcp_socket_create_task_schedule
+			from btu_scheduler.lib.diagnostics import diagnose_tcp_socket_create_task_schedule
 
 			if not task_schedule_id:
-				print("Error: You must provide a Task Schedule ID, e.g. 'btu test tcp-create-task-schedule TS-000123'.")
+				click.echo(
+					"Error: You must provide a Task Schedule ID, e.g. 'btu test tcp-create-task-schedule TS-000123'."
+				)
 				return
-			test_tcp_socket_create_task_schedule(task_schedule_id)
-			print("TCP socket create_task_schedule test completed.")
+			diagnose_tcp_socket_create_task_schedule(task_schedule_id)
+			click.echo("TCP socket create_task_schedule test completed.")
 
 		case "tcp-cancel-task-schedule":
-			from btu_scheduler.lib.tests import test_tcp_socket_cancel_task_schedule
+			from btu_scheduler.lib.diagnostics import diagnose_tcp_socket_cancel_task_schedule
 
 			if not task_schedule_id:
-				print("Error: You must provide a Task Schedule ID, e.g. 'btu test tcp-cancel-task-schedule TS-000123'.")
+				click.echo(
+					"Error: You must provide a Task Schedule ID, e.g. 'btu test tcp-cancel-task-schedule TS-000123'."
+				)
 				return
-			test_tcp_socket_cancel_task_schedule(task_schedule_id)
-			print("TCP socket cancel_task_schedule test completed.")
+			diagnose_tcp_socket_cancel_task_schedule(task_schedule_id)
+			click.echo("TCP socket cancel_task_schedule test completed.")
 
 		case "test-rq-hello-world":
-			from btu_scheduler.lib.tests import test_rq_hello_world
+			from btu_scheduler.lib.diagnostics import diagnose_rq_hello_world
 
-			test_rq_hello_world()
+			diagnose_rq_hello_world()
 
 		case _:
 			test_choices_string = "\n    ".join(test_choices)
-			print(f"Unhandled subcommand '{command}'.  Please choose one of:\n    {test_choices_string}\n")
+			raise click.ClickException(
+				f"Unhandled subcommand '{command}'. Please choose one of:\n    {test_choices_string}"
+			)
 
 
 @entry_point.command("service-status")

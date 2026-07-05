@@ -29,7 +29,6 @@ dependencies = [
     "click ~= 8.1.7",
 	"croniter==6.0.0",
 	"databases[asyncpg,asyncmy]>=0.9.0",  # Multi-database support: asyncpg for PostgreSQL, asyncmy for MariaDB/MySQL
-	"psycopg~=3.2.6",  # Kept for backward compatibility, but databases library will use asyncpg
 	"redis==5.2.1",
 	"requests==2.32.5",
  	"rq==1.15.1",  # Keeping this pinned to Frappe Framework v15 version of rq

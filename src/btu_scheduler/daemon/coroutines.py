@@ -3,11 +3,14 @@
 import asyncio
 import json
 
-import btu_scheduler
-from btu_scheduler import get_logger
+import structlog
+
 from btu_scheduler.lib import scheduler
+from btu_scheduler.lib.config import load_config
 from btu_scheduler.lib.structs import BtuTaskSchedule
 from btu_scheduler.lib.utils import Stopwatch
+
+log = structlog.get_logger(__name__)
 
 # Redis key where incoming commands are delivered from the Frappe web server.
 # Must match REDIS_COMMAND_QUEUE in btu/btu_api/scheduler.py.
@@ -35,7 +38,7 @@ def get_tcp_socket_port() -> int:
 	"""
 	Get the TCP socket port from the configuration.
 	"""
-	return btu_scheduler.get_config_data().tcp_socket_port
+	return load_config().tcp_socket_port
 
 
 async def internal_queue_consumer(shared_queue):
@@ -44,19 +47,19 @@ async def internal_queue_consumer(shared_queue):
 	"""
 	while True:
 		if shared_queue.qsize():
-			# get_logger().debug(f"IQM: Number of items in Queue = {shared_queue.qsize()}")
+			# log.debug(f"IQM: Number of items in Queue = {shared_queue.qsize()}")
 			next_task_schedule_id = (
 				await shared_queue.get()
 			)  # NOTE: The coroutine will hang out here, doing nothing, until something shows up in the Queue.
-			# get_logger().info(f"IQM: The next Task Schedule ID = {next_task_schedule_id}")
+			# log.info(f"IQM: The next Task Schedule ID = {next_task_schedule_id}")
 			task_schedule: BtuTaskSchedule = await BtuTaskSchedule.init_from_schedule_key(next_task_schedule_id)
 			if task_schedule:
 				scheduler.add_task_schedule_to_rq(task_schedule)
-				get_logger().debug(
+				log.debug(
 					f"IQM: Added task schedule to Redis Key 'btu_scheduler:task_execution_times'.  Size of internal queue is now {shared_queue.qsize()}"
 				)
 			else:
-				get_logger().error(
+				log.error(
 					f"IQM: Unable to construct a BtuTaskSchedule object from Task Schedule ID = {next_task_schedule_id}"
 				)
 
@@ -74,22 +77,20 @@ async def internal_queue_producer(shared_queue):
 	As the queue is filled, Thread 1 handles consuming and procesing each TSIK.
 	"""
 
-	btu_scheduler.get_logger().info("Initializing coroutine 'internal_queue_producer()' ...")
+	log.info("Initializing coroutine 'internal_queue_producer()' ...")
 	stopwatch = Stopwatch()
 	while True:
 		elapsed_seconds = stopwatch.get_elapsed_seconds_total()  # calculate elapsed seconds since last Queue Repopulate
-		if elapsed_seconds > btu_scheduler.get_config_data().full_refresh_internal_secs:  # If sufficient time has passed ...
-			btu_scheduler.get_logger().debug(
+		if elapsed_seconds > load_config().full_refresh_internal_secs:  # If sufficient time has passed ...
+			log.debug(
 				f"Producer: {elapsed_seconds} seconds have elapsed.  Time for a full-write of Task Schedule Keys in Redis!"
 			)
 			result = await scheduler.queue_full_refill(shared_queue)
 			if result:
-				btu_scheduler.get_logger().debug(f"  * Internal queue contains a total of {shared_queue.qsize()} values.")
+				log.debug(f"  * Internal queue contains a total of {shared_queue.qsize()} values.")
 				scheduler.rq_print_scheduled_tasks(False)  # log the Task Schedule:
 			else:
-				btu_scheduler.get_logger().warning(
-					"No Task Schedules found in the database.  Unable to repopulate the internal queue."
-				)
+				log.warning("No Task Schedules found in the database.  Unable to repopulate the internal queue.")
 			stopwatch.reset()  # reset the stopwatch and begin a new countdown
 
 		await asyncio.sleep(1)  # blocking request, yields controls to another coroutine for a while.
@@ -105,11 +106,11 @@ async def review_next_execution_times(shared_queue):
 	  ----------------
 	"""
 	await asyncio.sleep(5)  # One-time delay of execution: this gives the other coroutines a chance to initialize.
-	btu_scheduler.get_logger().info(
+	log.info(
 		"Starting coroutine review_next_execution_times(), adding eligible RQ Jobs to RQ Queues at the appropriate time."
 	)
 	while True:
-		btu_scheduler.get_logger().debug("Thread 3: Attempting to add new Jobs to RQ...")
+		log.debug("Thread 3: Attempting to add new Jobs to RQ...")
 		# This thread requires a lock on the Internal Queue, so that after a Task runs, it can be rescheduled.
 		stopwatch = Stopwatch()
 		await scheduler.check_and_run_eligible_task_schedules(shared_queue)
@@ -117,7 +118,7 @@ async def review_next_execution_times(shared_queue):
 		# I want this thread to execute at roughly the same interval.
 		# By subtracting the Time Elapsed above, from the desired Wait Time, we know how much longer the thread should sleep.
 		await asyncio.sleep(
-			btu_scheduler.get_config().scheduler_polling_interval - elapsed_seconds
+			load_config().scheduler_polling_interval - elapsed_seconds
 		)  # wait N seconds before trying again.
 
 
@@ -130,15 +131,15 @@ async def _send_tcp_json_response(writer, payload: dict) -> None:
 		writer.write(response_text.encode("utf-8"))
 		await writer.drain()
 	except (ConnectionResetError, ConnectionError, BrokenPipeError, OSError) as conn_ex:
-		get_logger().debug(f"TCP Socket: Client closed connection during response: {conn_ex}")
+		log.debug(f"TCP Socket: Client closed connection during response: {conn_ex}")
 	except Exception as ex:
-		get_logger().error(f"TCP Socket: Error sending response to client: {ex}")
+		log.error(f"TCP Socket: Error sending response to client: {ex}")
 	finally:
 		try:
 			writer.close()
 			await writer.wait_closed()
 		except Exception as close_ex:
-			get_logger().debug(f"TCP Socket: Error closing writer (connection may already be closed): {close_ex}")
+			log.debug(f"TCP Socket: Error closing writer (connection may already be closed): {close_ex}")
 
 
 async def handle_tcp_request(reader, writer):
@@ -155,7 +156,7 @@ async def handle_tcp_request(reader, writer):
 	try:
 		data = await reader.read(4096)
 		if not data:
-			get_logger().info(f"TCP Socket: Client {addr} closed connection before sending data.")
+			log.info(f"TCP Socket: Client {addr} closed connection before sending data.")
 			try:
 				writer.close()
 				await writer.wait_closed()
@@ -163,13 +164,13 @@ async def handle_tcp_request(reader, writer):
 				pass
 			return
 
-		get_logger().info(f"TCP Socket: Received raw data from {addr}: {data!r}")
+		log.info(f"TCP Socket: Received raw data from {addr}: {data!r}")
 
 		# Decode bytes into a UTF-8 string.
 		try:
 			message_str = data.decode("utf-8").strip()
 		except UnicodeDecodeError:
-			get_logger().warning("TCP Socket: Received non-UTF-8 data that cannot be converted to a string.")
+			log.warning("TCP Socket: Received non-UTF-8 data that cannot be converted to a string.")
 			await _send_tcp_json_response(
 				writer,
 				{
@@ -183,7 +184,7 @@ async def handle_tcp_request(reader, writer):
 		try:
 			request_obj = json.loads(message_str)
 		except json.JSONDecodeError:
-			get_logger().warning(f"TCP Socket: Unable to parse JSON from request string: {message_str!r}")
+			log.warning(f"TCP Socket: Unable to parse JSON from request string: {message_str!r}")
 			await _send_tcp_json_response(
 				writer,
 				{
@@ -290,7 +291,7 @@ async def handle_tcp_request(reader, writer):
 		if request_type == "create_task_schedule":
 			internal_queue = _get_tcp_internal_queue()
 			if internal_queue is None:
-				get_logger().error(
+				log.error(
 					"TCP Socket: Internal queue is not available; cannot enqueue Task Schedule ID from TCP request."
 				)
 				await _send_tcp_json_response(
@@ -304,7 +305,7 @@ async def handle_tcp_request(reader, writer):
 
 			await internal_queue.put(task_schedule_id)
 			message = f"BTU Scheduler now re-processing Task Schedule {task_schedule_id} in Python RQ."
-			get_logger().info(f"TCP Socket: Enqueued Task Schedule ID {task_schedule_id} from TCP request.")
+			log.info(f"TCP Socket: Enqueued Task Schedule ID {task_schedule_id} from TCP request.")
 			await _send_tcp_json_response(
 				writer,
 				{
@@ -321,9 +322,7 @@ async def handle_tcp_request(reader, writer):
 				# After cancellation, print remaining tasks to stdout as requested.
 				scheduler.rq_print_scheduled_tasks(to_stdout=True)
 			except Exception as ex:
-				get_logger().error(
-					f"TCP Socket: Error while attempting to cancel Task Schedule {task_schedule_id}: {ex}"
-				)
+				log.error(f"TCP Socket: Error while attempting to cancel Task Schedule {task_schedule_id}: {ex}")
 				await _send_tcp_json_response(
 					writer,
 					{
@@ -352,14 +351,14 @@ async def handle_tcp_request(reader, writer):
 			},
 		)
 	except (ConnectionResetError, ConnectionError, BrokenPipeError, OSError) as conn_ex:
-		get_logger().debug(f"TCP Socket: Client closed connection or network error occurred: {conn_ex}")
+		log.debug(f"TCP Socket: Client closed connection or network error occurred: {conn_ex}")
 		try:
 			writer.close()
 			await writer.wait_closed()
 		except Exception:
 			pass
 	except Exception as ex:
-		get_logger().error(f"TCP Socket: Unexpected error in handle_tcp_request(): {ex}")
+		log.error(f"TCP Socket: Unexpected error in handle_tcp_request(): {ex}")
 		try:
 			await _send_tcp_json_response(
 				writer,
@@ -385,11 +384,11 @@ async def tcp_socket_listener():
 		server = await asyncio.start_server(handle_tcp_request, "0.0.0.0", port_number)
 		# addr = server.sockets[0].getsockname()
 		async with server:
-			get_logger().info(f"Starting TCP listener on port number {port_number} ...")
+			log.info(f"Starting TCP listener on port number {port_number} ...")
 			await server.serve_forever()
 	except OSError as ex:
 		if "Address already in use" in str(ex):
-			print(f"Port {port_number} is already in use. Please choose a different port.")
+			log.error(f"Port {port_number} is already in use. Please choose a different port.")
 		else:
 			raise ex
 
@@ -401,32 +400,33 @@ async def _dispatch_redis_command(request_type: str, request_content: str) -> No
 	Called after the receipt ACK has already been sent, so this function
 	can take as long as it needs without affecting the caller's wait time.
 	"""
-	get_logger().info(f"Redis RPC: dispatching '{request_type}' with content '{request_content}'.")
+	log.info(f"Redis RPC: dispatching '{request_type}' with content '{request_content}'.")
 
 	if request_type == "ping":
-		get_logger().info("Redis RPC: ping received.")
+		log.info("Redis RPC: ping received.")
 		return
 
 	if request_type == "create_task_schedule":
 		internal_queue = _get_tcp_internal_queue()
 		if internal_queue is None:
-			get_logger().error("Redis RPC: internal queue unavailable; cannot process create_task_schedule.")
+			log.error("Redis RPC: internal queue unavailable; cannot process create_task_schedule.")
 			return
 		await internal_queue.put(request_content)
-		get_logger().info(f"Redis RPC: enqueued Task Schedule ID '{request_content}'.")
+		log.info(f"Redis RPC: enqueued Task Schedule ID '{request_content}'.")
 		return
 
 	if request_type == "cancel_task_schedule":
 		try:
 			from btu_scheduler.lib import scheduler
+
 			scheduler.rq_cancel_scheduled_task(request_content)
 			scheduler.rq_print_scheduled_tasks(to_stdout=False)
-			get_logger().info(f"Redis RPC: cancelled Task Schedule '{request_content}'.")
+			log.info(f"Redis RPC: cancelled Task Schedule '{request_content}'.")
 		except Exception as ex:
-			get_logger().error(f"Redis RPC: error cancelling Task Schedule '{request_content}': {ex}")
+			log.error(f"Redis RPC: error cancelling Task Schedule '{request_content}': {ex}")
 		return
 
-	get_logger().warning(f"Redis RPC: unrecognised request_type '{request_type}'.")
+	log.warning(f"Redis RPC: unrecognised request_type '{request_type}'.")
 
 
 async def redis_command_listener() -> None:
@@ -450,16 +450,13 @@ async def redis_command_listener() -> None:
 	redis_conn = create_connection()
 	loop = asyncio.get_event_loop()
 
-	get_logger().info(f"Redis RPC command listener started, monitoring queue '{REDIS_COMMAND_QUEUE}'.")
+	log.info(f"Redis RPC command listener started, monitoring queue '{REDIS_COMMAND_QUEUE}'.")
 
 	while True:
 		try:
 			# Blocking BRPOP with a 1-second timeout, run in a thread so the event loop
 			# stays free for the scheduler's other coroutines during the wait.
-			result = await loop.run_in_executor(
-				None,
-				lambda: redis_conn.blpop([REDIS_COMMAND_QUEUE], timeout=1)
-			)
+			result = await loop.run_in_executor(None, lambda: redis_conn.blpop([REDIS_COMMAND_QUEUE], timeout=1))
 
 			if result is None:
 				continue  # nothing arrived within the 1-second window; loop back
@@ -469,7 +466,7 @@ async def redis_command_listener() -> None:
 			try:
 				command = json.loads(raw_message)
 			except json.JSONDecodeError:
-				get_logger().warning(f"Redis RPC: received non-JSON message, discarding: {raw_message!r}")
+				log.warning(f"Redis RPC: received non-JSON message, discarding: {raw_message!r}")
 				continue
 
 			request_type = command.get("request_type", "")
@@ -479,11 +476,13 @@ async def redis_command_listener() -> None:
 			# Step 1: ACK receipt BEFORE executing anything.
 			# The Frappe web worker is blocked on BLPOP(response_key); this unblocks it.
 			if response_key:
-				ack = json.dumps({
-					"status": "ok",
-					"request_type": request_type,
-					"message": "Command received by BTU Scheduler.",
-				})
+				ack = json.dumps(
+					{
+						"status": "ok",
+						"request_type": request_type,
+						"message": "Command received by BTU Scheduler.",
+					}
+				)
 				redis_conn.lpush(response_key, ack)
 				redis_conn.expire(response_key, 60)  # auto-clean orphaned keys if caller died
 
@@ -491,5 +490,5 @@ async def redis_command_listener() -> None:
 			await _dispatch_redis_command(request_type, request_content)
 
 		except Exception as ex:
-			get_logger().error(f"Redis RPC listener unhandled error: {ex}")
+			log.error(f"Redis RPC listener unhandled error: {ex}")
 			await asyncio.sleep(1)  # brief back-off before resuming

@@ -6,15 +6,17 @@ from typing import Union
 from zoneinfo import ZoneInfo
 
 import requests
+import structlog
 
-from btu_scheduler import get_config_data, get_logger
 from btu_scheduler.lib import btu_cron
 from btu_scheduler.lib.btu_rq import RQJobWrapper
+from btu_scheduler.lib.config import load_config
 from btu_scheduler.lib.sql import get_task_by_id, get_task_schedule_by_id
 from btu_scheduler.lib.structs.sanchez import get_pickled_function_from_web
 from btu_scheduler.lib.utils import get_frappe_base_url
 
 NoneType = type(None)
+log = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -107,7 +109,7 @@ class BtuTaskSchedule:
 		Call Frappe website to immediately enqueue a Task as an RQ Job.
 		"""
 
-		config_data = get_config_data()
+		config_data = load_config()
 		url = f"{get_frappe_base_url()}/api/method/btu.btu_api.endpoints.enqueue_for_next_available_worker"
 		headers = {
 			"Authorization": config_data.webserver_token,
@@ -119,10 +121,8 @@ class BtuTaskSchedule:
 
 		response = requests.post(url=url, headers=headers, params={"task_schedule_key": self.id}, timeout=30)
 
-		get_logger().debug(
-			f"Response from Frappe to Enqueue: Status Code = {response.status_code}, Data = {response.json()}"
-		)
+		log.debug(f"Response from Frappe to Enqueue: Status Code = {response.status_code}, Data = {response.json()}")
 		if response.status_code == 200:
-			get_logger().info(f"Successfully enqueued Task Schedule: '{self.id}'")
+			log.info(f"Successfully enqueued Task Schedule: '{self.id}'")
 		else:
 			raise IOError(f"Unexpected response code from Frappe Framework web server: {response.json()}")

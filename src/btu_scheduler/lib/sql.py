@@ -2,7 +2,7 @@
 
 from databases import Database
 
-from btu_scheduler import get_config
+from btu_scheduler.lib.config import load_config
 
 # Global database instance (initialized on first use)
 _database_instance: Database = None
@@ -31,7 +31,7 @@ def _quote_identifier(identifier: str, db_type: str) -> str:
 
 
 def quote(sql_object):
-	return _quote_identifier(sql_object, get_config().get_sql_type())
+	return _quote_identifier(sql_object, load_config().sql_type)
 
 
 async def get_database() -> Database:
@@ -42,21 +42,12 @@ async def get_database() -> Database:
 	global _database_instance
 
 	if _database_instance is None:
-		config = get_config()
+		config = load_config()
 		connection_string = config.get_sql_connection_string()
 		_database_instance = Database(connection_string)
 		await _database_instance.connect()
 
 	return _database_instance
-
-
-async def create_connection():
-	"""
-	Create a connection to the database.
-	This function is kept for backward compatibility but now returns a Database instance.
-	The actual connection is managed by the databases library.
-	"""
-	return await get_database()
 
 
 async def get_task_schedule_by_id(task_schedule_id: str) -> dict:
@@ -163,4 +154,3 @@ async def get_enabled_task_schedules() -> list:
 	database = await get_database()
 	sql_rows = await database.fetch_all(query_string)
 	return sql_rows
-

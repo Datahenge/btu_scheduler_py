@@ -1,7 +1,7 @@
-"""btu_scheduler/lib/tests.py"""
+"""btu_scheduler/lib/diagnostics.py"""
 
 
-def test_redis():
+def diagnose_redis():
 	"""
 	Test the connection to the Redis database.
 	"""
@@ -11,15 +11,15 @@ def test_redis():
 	return conn.ping()
 
 
-async def test_sql(quiet=False):
+async def diagnose_sql(quiet=False):
 	"""
 	Test the connection to the Frappe database.
 	"""
-	from btu_scheduler import get_config
+	from btu_scheduler.lib.config import load_config
 	from btu_scheduler.lib.sql import _quote_identifier, get_database
 
 	def quote(x):
-		return _quote_identifier(x, get_config().get_sql_type())
+		return _quote_identifier(x, load_config().sql_type)
 
 	query_string = f"SELECT count(*) AS record_count FROM {quote('tabDocType')};"
 
@@ -29,12 +29,12 @@ async def test_sql(quiet=False):
 		print(f"Number of records in DocType table = {sql_row['record_count']}")
 
 
-def test_slack():
+def diagnose_slack():
 	import ssl
 
 	from slack_sdk import WebClient
 
-	from btu_scheduler import get_config
+	from btu_scheduler.lib.config import load_config
 	from btu_scheduler.lib.utils import get_datetime_string, send_message_to_slack
 
 	# Test One
@@ -48,23 +48,22 @@ def test_slack():
 	# Test Two
 	message = f"{get_datetime_string()} : This is a test initiated by the 'btu-scheduler' CLI application.\nNothing to see here; move along!"
 	try:
-		send_message_to_slack(get_config(), message)
+		send_message_to_slack(load_config(), message)
 		print("\u2713 Second test successful.  Please examine Slack to find a test message.")
 	except Exception as ex:
 		print(f"\u2717 Second test failed: {ex}")
 
 
-def test_frappe_ping(debug_mode=False):
+def diagnose_frappe_ping(debug_mode=False):
 	"""
 	Calls a built-in BTU endpoint 'test_ping'
 	"""
 	import requests
 
-	import btu_scheduler
+	from btu_scheduler.lib.config import load_config
 	from btu_scheduler.lib.utils import get_frappe_base_url
 
-	btu_scheduler.initialize_shared_config()
-	config_data = btu_scheduler.get_config_data()
+	config_data = load_config()
 
 	url = f"{get_frappe_base_url()}/api/method/btu.btu_api.endpoints.test_ping"
 	if debug_mode:
@@ -83,7 +82,7 @@ def test_frappe_ping(debug_mode=False):
 	print(f"Response JSON: {response.json()}")
 
 
-def test_pickler(debug_mode: bool = True):
+def diagnose_pickler(debug_mode: bool = True):
 	"""
 	Function calls the Frappe web server, and asks for 'Hello World' in bytes.
 	"""
@@ -92,10 +91,10 @@ def test_pickler(debug_mode: bool = True):
 	import chardet
 	import requests
 
-	import btu_scheduler
+	from btu_scheduler.lib.config import load_config
 	from btu_scheduler.lib.utils import get_frappe_base_url
 
-	config_data = btu_scheduler.get_config_data()
+	config_data = load_config()
 	url = f"{get_frappe_base_url()}/api/method/btu.btu_api.endpoints.test_function_ping_now_bytes"
 	headers = {
 		"Authorization": config_data.webserver_token,
@@ -153,7 +152,7 @@ def decode_redis(src):
 		raise Exception("type not handled: " + type(src))
 
 
-def test_rq_hello_world():
+def diagnose_rq_hello_world():
 	"""
 	Demonstrate how Python RQ constructs a Hash key, and pickles a Python function.
 	"""
@@ -195,13 +194,11 @@ def _tcp_send_json_request(payload: dict) -> None:
 	import json as _json
 	import socket as _socket
 
-	import btu_scheduler as _btu_scheduler
 	from btu_scheduler.lib.config import reload_config
 
-	_btu_scheduler.shared_config.set(reload_config())
-
-	host = _btu_scheduler.get_config_data().webserver_ip
-	port = _btu_scheduler.get_config_data().tcp_socket_port
+	config_data = reload_config()
+	host = config_data.webserver_ip
+	port = config_data.tcp_socket_port
 
 	sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
 	try:
@@ -219,7 +216,7 @@ def _tcp_send_json_request(payload: dict) -> None:
 		sock.close()
 
 
-def test_tcp_socket_echo():
+def diagnose_tcp_socket_echo():
 	"""
 	Test the TCP socket listener using request_type='echo'.
 	"""
@@ -230,7 +227,7 @@ def test_tcp_socket_echo():
 	_tcp_send_json_request(payload)
 
 
-def test_tcp_socket_ping():
+def diagnose_tcp_socket_ping():
 	"""
 	Test the TCP socket listener using request_type='ping'.
 	"""
@@ -241,7 +238,7 @@ def test_tcp_socket_ping():
 	_tcp_send_json_request(payload)
 
 
-def test_tcp_socket_create_task_schedule(task_schedule_id: str):
+def diagnose_tcp_socket_create_task_schedule(task_schedule_id: str):
 	"""Test the TCP socket listener using request_type='create_task_schedule'."""
 	payload = {
 		"request_type": "create_task_schedule",
@@ -250,7 +247,7 @@ def test_tcp_socket_create_task_schedule(task_schedule_id: str):
 	_tcp_send_json_request(payload)
 
 
-def test_tcp_socket_cancel_task_schedule(task_schedule_id: str):
+def diagnose_tcp_socket_cancel_task_schedule(task_schedule_id: str):
 	"""Test the TCP socket listener using request_type='cancel_task_schedule'."""
 	payload = {
 		"request_type": "cancel_task_schedule",

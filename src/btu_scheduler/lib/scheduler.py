@@ -4,9 +4,10 @@ from dataclasses import dataclass
 from datetime import datetime as DateTimeType
 from zoneinfo import ZoneInfo
 
-import btu_scheduler
-from btu_scheduler import get_logger
+import structlog
+
 from btu_scheduler.lib.btu_rq import create_connection
+from btu_scheduler.lib.config import load_config
 from btu_scheduler.lib.sql import get_enabled_task_schedules
 from btu_scheduler.lib.structs import BtuTaskSchedule
 
@@ -14,6 +15,7 @@ from btu_scheduler.lib.structs import BtuTaskSchedule
 # static RQ_KEY_SCHEDULER: &'static str = "rq:scheduler";
 # static RQ_KEY_SCHEDULER_LOCK: &'static str = "rq:scheduler_lock";
 RQ_KEY_SCHEDULED_TASKS = "btu_scheduler:task_execution_times"
+log = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -92,7 +94,7 @@ class RQScheduledTask:
 		"""
 		Returns the Next Execution Datetime in the local time zone.
 		"""
-		return self.next_execution_as_datetime_utc.astimezone(btu_scheduler.get_config().timezone())
+		return self.next_execution_as_datetime_utc.astimezone(load_config().timezone())
 
 
 def add_task_schedule_to_rq(task_schedule: BtuTaskSchedule):
@@ -170,15 +172,15 @@ def add_task_schedule_to_rq(task_schedule: BtuTaskSchedule):
 			f"Next Execution Time (UTC) for Task Schedule {task_schedule.id} = {rq_scheduled_task.next_execution_as_datetime_utc}"
 		)
 		# If application configuration has a good Time Zone string, print Next Execution Time in local time...
-		if btu_scheduler.get_config().timezone():
+		if load_config().timezone():
 			next_execution_time_local = rq_scheduled_task.next_execution_as_datetime_utc.astimezone(
-				btu_scheduler.get_config().timezone()
+				load_config().timezone()
 			)
 			messages.append(
-				f"Next Execution Time ({btu_scheduler.get_config().timezone()}) for Task Schedule {task_schedule.id} = {next_execution_time_local}"
+				f"Next Execution Time ({load_config().timezone()}) for Task Schedule {task_schedule.id} = {next_execution_time_local}"
 			)
 		for each_message in messages:
-			get_logger().debug(each_message)
+			log.debug(each_message)
 
 	# NOTE: At the conclusion of this function, if you examined the Redis database:
 	#   1.  "Score" is the Next Execution Time (as a Unix timestamp)
@@ -196,14 +198,12 @@ def fetch_task_schedules_ready_for_rq(sched_before_unix_time: int) -> list:
 
 	# rq_print_scheduled_tasks(&app_config);
 
-	get_logger().debug(
+	log.debug(
 		"fetch_task_schedules_ready_for_rq() : reviewing 'Next Execution Times' for each Task Schedule in Redis..."
 	)
 	redis_conn = create_connection()
 	if not redis_conn:
-		get_logger().error(
-			"fetch_task_schedules_ready_for_rq(): Cannot establish connection to Redis; returning an empty list."
-		)
+		log.error("fetch_task_schedules_ready_for_rq(): Cannot establish connection to Redis; returning an empty list.")
 		return []
 
 	# TODO: As per Redis 6.2.0, the command 'zrangebyscore' is considered deprecated.
@@ -213,7 +213,7 @@ def fetch_task_schedules_ready_for_rq(sched_before_unix_time: int) -> list:
 		return []
 
 	if len(zranges) > 0:
-		get_logger().info(f"Found {len(zranges)} Task Schedules that qualify for immediate execution.")
+		log.info(f"Found {len(zranges)} Task Schedules that qualify for immediate execution.")
 
 	# The strings in the vector are a concatenation:  Task Schedule ID, pipe character, Unix Time.
 	# Need to split off the trailing Unix Time, to obtain a list of Task Schedules.
@@ -230,9 +230,9 @@ async def check_and_run_eligible_task_schedules(internal_queue: object):
 	If the Next Execution Time is in the past?  Then place the RQ Job into the appropriate queue.  RQ and Workers take over from there.
 	"""
 	current_datetime_utc = DateTimeType.now(ZoneInfo("UTC"))
-	# get_logger().info(f"Current DateTime (UTC) is {current_datetime_utc}")
+	# log.info(f"Current DateTime (UTC) is {current_datetime_utc}")
 	current_timestamp = current_datetime_utc.timestamp()
-	# get_logger().info(f"Current Timestamp (UTC) is {current_timestamp}")
+	# log.info(f"Current Timestamp (UTC) is {current_timestamp}")
 
 	# Developer Note: This function is analgous to the 'rq-scheduler' Python function: 'Scheduler.enqueue_jobs()'
 	for task_schedule_instance in fetch_task_schedules_ready_for_rq(current_timestamp):
@@ -243,32 +243,28 @@ async def run_immediate_scheduled_task(task_schedule_instance: RQScheduledTask, 
 	"""
 	Create a Python RQ Task and assign to a Queue, so the next available worker can run it.
 	"""
-	get_logger().info(
+	log.info(
 		f">>>>> Time To Make The Donuts! (enqueuing Redis Job '{task_schedule_instance.task_schedule_id}' for immediate execution)"
 	)
 	redis_conn = create_connection()
 	if not redis_conn:
-		get_logger().error(
-			"Early exit from run_immediate_scheduled_task(); cannot establish a connection to Redis database."
-		)
+		log.error("Early exit from run_immediate_scheduled_task(); cannot establish a connection to Redis database.")
 		return  # If cannot connect to Redis, do not panic the thread.  Instead, return an empty Vector.
 
 	# 1. Read the SQL database to construct a BTU Task Schedule struct.
 	try:
 		task_schedule = await BtuTaskSchedule.init_from_schedule_key(task_schedule_instance.task_schedule_id)
 	except Exception as ex:
-		get_logger().error(f"Unable to read Task Schedule from the SQL database. Error = {ex}")
+		log.error(f"Unable to read Task Schedule from the SQL database. Error = {ex}")
 		return
 
 	if not task_schedule:
-		get_logger().error(
-			f"Unable to read a BTU Task Schedule '{task_schedule_instance.task_schedule_id}' from SQL database."
-		)
+		log.error(f"Unable to read a BTU Task Schedule '{task_schedule_instance.task_schedule_id}' from SQL database.")
 		return
 
 	# 2. Exit early if the Task Schedule is disabled (this should be a rare scenario, but definitely worth checking.)
 	if not task_schedule.enabled:
-		get_logger().warning(
+		log.warning(
 			f"Task Schedule {task_schedule.id} is disabled in SQL database; BTU will neither execute nor re-queue."
 		)
 		return
@@ -276,15 +272,13 @@ async def run_immediate_scheduled_task(task_schedule_instance: RQScheduledTask, 
 	try:
 		task_schedule.enqueue_for_next_available_worker()
 	except Exception as ex:
-		get_logger().error(f"Error while attempting to queue job for execution: {ex}")
+		log.error(f"Error while attempting to queue job for execution: {ex}")
 		return
 
 	# IMPORTANT: Remove this Task from the BTU Schedule Key (so it doesn't accidentally get executed twice)
 	redis_result = redis_conn.zrem(RQ_KEY_SCHEDULED_TASKS, str(task_schedule_instance.to_tsik()))
 	if redis_result != 1:
-		get_logger().error(
-			f"Unable to remove Task Schedule Instance using 'zrem'.  Response from Redis = {redis_result}"
-		)
+		log.error(f"Unable to remove Task Schedule Instance using 'zrem'.  Response from Redis = {redis_result}")
 		return
 
 	# Finally, recalculate the next Run Time.
@@ -299,7 +293,7 @@ def rq_get_scheduled_tasks() -> list[RQScheduledTask]:
 	"""
 	redis_conn = create_connection()
 	if not redis_conn:
-		get_logger().warning("In lieu of a Redis Connection, returning an empty vector.")
+		log.warning("In lieu of a Redis Connection, returning an empty vector.")
 		return []
 
 	redis_result: tuple = redis_conn.zscan(
@@ -331,9 +325,9 @@ def rq_cancel_scheduled_task(task_schedule_id: str) -> tuple:
 				removed = True
 
 	if removed:
-		get_logger().info("Scheduled Task successfully removed from Redis Queue.")
+		log.info("Scheduled Task successfully removed from Redis Queue.")
 	else:
-		get_logger().info("Scheduled Task not found in Redis Queue.")
+		log.info("Scheduled Task not found in Redis Queue.")
 
 
 def rq_print_scheduled_tasks(to_stdout: bool):
@@ -344,7 +338,7 @@ def rq_print_scheduled_tasks(to_stdout: bool):
 		if to_stdout:
 			print(f"{message}")
 		else:
-			get_logger().info(message)
+			log.info(message)
 
 
 def clear_all_scheduled_tasks() -> bool:
@@ -353,7 +347,7 @@ def clear_all_scheduled_tasks() -> bool:
 	"""
 	redis_conn = create_connection()
 	if not redis_conn:
-		get_logger().error("clear_all_scheduled_tasks(): Cannot establish connection to Redis database.")
+		log.error("clear_all_scheduled_tasks(): Cannot establish connection to Redis database.")
 		return False
 	redis_conn.zremrangebyrank(RQ_KEY_SCHEDULED_TASKS, 0, -1)
 	return True
@@ -363,21 +357,21 @@ async def queue_full_refill(internal_queue: object) -> int:
 	"""
 	Queries the Frappe database, adding every active Task Schedule to BTU internal queue.
 	"""
-	# btu_scheduler.get_logger().debug(f"  * before refill, the queue contains {internal_queue.qsize()} values.")
+	# log.debug(f"  * before refill, the queue contains {internal_queue.qsize()} values.")
 	rows_added = 0
 	enabled_schedules = await get_enabled_task_schedules()
 	if not enabled_schedules:
-		btu_scheduler.get_logger().debug("queue_full_refill() : No enabled Task Schedules found in the database.")
+		log.debug("queue_full_refill() : No enabled Task Schedules found in the database.")
 		return 0
 
-	# btu_scheduler.get_logger().debug(f"  * queue_full_refill() found {len(enabled_schedules)} enabled Task Schedules.")
+	# log.debug(f"  * queue_full_refill() found {len(enabled_schedules)} enabled Task Schedules.")
 	for each_row in enabled_schedules:  # each_row is a dictionary with 2 keys: 'name' and 'desc_short'
 		await internal_queue.put(
 			each_row["schedule_key"]
 		)  # add the schedule_key ('name') of a BTU Task Schedule document.
 		rows_added += 1
 	if rows_added:
-		btu_scheduler.get_logger().debug(f"  * filled internal queue with {rows_added} Task Schedule identifiers.")
+		log.debug(f"  * filled internal queue with {rows_added} Task Schedule identifiers.")
 	return rows_added
 
 

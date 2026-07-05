@@ -4,18 +4,20 @@ import json
 from typing import Union
 
 import requests
+import structlog
 
-from btu_scheduler import get_config_data
+from btu_scheduler.lib.config import load_config
 from btu_scheduler.lib.utils import get_frappe_base_url
 
 NoneType = type(None)
+log = structlog.get_logger(__name__)
 
 
 async def get_pickled_function_from_web(task_id: str, task_schedule_id: Union[str, NoneType]) -> bytes:
 	"""
 	Call Frappe REST API and acquire pickled Python function as bytes.
 	"""
-	config_data = get_config_data()
+	config_data = load_config()
 	url = f"{get_frappe_base_url()}/api/method/btu.btu_api.endpoints.get_pickled_task"
 	headers = {
 		"Authorization": config_data.webserver_token,
@@ -44,7 +46,6 @@ async def get_pickled_function_from_web(task_id: str, task_schedule_id: Union[st
 
 	response_bytes = bytes(response_integer_array)
 
-	print("Response Bytes:")
-	print(response_bytes)
+	log.debug("Received pickled function bytes from Frappe.", response_bytes=response_bytes)
 
 	return response_bytes

@@ -8,7 +8,10 @@ import time
 from datetime import datetime as DateTimeType
 
 # Third Party
+import structlog
 from slack_sdk.webhook import WebhookClient
+
+log = structlog.get_logger(__name__)
 
 
 def validate_datatype(argument_name, argument_value, expected_type, mandatory=False):
@@ -61,7 +64,7 @@ def whatis(message):
 	msg += f"\n  * Value: {message}\n  * Type: {message_type}"
 	msg += f"\n  * Caller: {parent_caller_function}"
 	msg += f"\n  * Caller Path: {parent_caller_path}\n  * Caller Line: {parent_caller_line}\n"
-	print(msg)
+	log.debug(msg)
 
 
 def send_message_to_slack(app_config, message_string: str) -> bool:
@@ -125,7 +128,7 @@ class Stopwatch:
 			)
 			if prefix or self.description:
 				message = f"---> {prefix or self.description} {message}"
-			print(message)
+			log.info(message)
 
 		# This is now the 'last_checkpoint'
 		self.last_checkpoint = now
@@ -181,14 +184,14 @@ def utc_to_rq_string(datetime_utc: DateTimeType) -> str:
 	# 2022-12-01T08:32:20Z
 
 	result = datetime_utc.isoformat()
-	print(f"utc_to_rq_string() >>> {result}")
+	log.debug("Formatted UTC datetime for RQ.", rq_datetime=result)
 	return result
 
 
 def get_frappe_base_url() -> str:
-	import btu_scheduler
+	from btu_scheduler.lib.config import load_config
 
-	config_data = btu_scheduler.get_config_data()
+	config_data = load_config()
 
 	if config_data.webserver_port == 443:
 		return f"https://{config_data.webserver_ip}"

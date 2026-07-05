@@ -2,10 +2,14 @@
 
 import asyncio
 
-import btu_scheduler
+import structlog
+
+from btu_scheduler.lib.config import bootstrap_scheduler
 from btu_scheduler.lib.scheduler import queue_full_refill
-from btu_scheduler.lib.tests import test_redis, test_sql
+from btu_scheduler.lib.diagnostics import diagnose_redis, diagnose_sql
 from btu_scheduler.lib.utils import is_port_in_use
+
+log = structlog.get_logger(__name__)
 
 
 async def main():
@@ -23,50 +27,43 @@ async def main():
 		tcp_socket_listener,
 	)
 
-	btu_scheduler.initialize_shared_config(handle_signals=True)
-	btu_scheduler.get_logger().debug("Initialized configuration in Main Thread.")
-	tcp_socket_enabled = not btu_scheduler.get_config().disable_tcp_socket
-	redis_rpc_enabled = not btu_scheduler.get_config().disable_redis_rpc
+	settings, _bootstrap_log = bootstrap_scheduler(handle_signals=True)
+	log.debug("Initialized configuration in Main Thread.")
+	tcp_socket_enabled = not settings.disable_tcp_socket
+	redis_rpc_enabled = not settings.disable_redis_rpc
 
 	# Make sure Redis is available.
 	try:
-		test_redis()  # Synchronous function.
+		diagnose_redis()  # Synchronous function.
 	except Exception as ex:
-		btu_scheduler.get_logger().error(f"Unable to connect to Frappe Redis queue: {ex}")
+		log.error(f"Unable to connect to Frappe Redis queue: {ex}")
 		return
 
-	await test_sql(quiet=True)
+	await diagnose_sql(quiet=True)
 
 	# Make sure port 8888 is available
 	if tcp_socket_enabled and is_port_in_use(get_tcp_socket_port()):
-		btu_scheduler.get_logger().error(f"Port {get_tcp_socket_port()} is already in use.")
+		log.error(f"Port {get_tcp_socket_port()} is already in use.")
 		return
 
 	internal_queue = asyncio.Queue()
 	set_tcp_internal_queue(internal_queue)
 
-	print("-------------------------------------")
-	print("BTU Scheduler: by Datahenge LLC")
-	print("-------------------------------------")
-	print("\nThis daemon performs the following functions:\n")
-	print(
-		"* Performs the role of a Scheduler, enqueuing BTU Task Schedules in Python RQ whenever it's time to run them."
-	)
-	print(
-		f"* Performs a full-refresh of BTU Task Schedules every {btu_scheduler.get_config_data().full_refresh_internal_secs} seconds."
-	)
+	log.info("BTU Scheduler daemon starting", company="Datahenge LLC")
+	log.info("Scheduler enqueues due BTU Task Schedules in Python RQ.")
+	log.info("Full refresh interval configured.", seconds=settings.full_refresh_internal_secs)
 
 	# Redis RPC (primary control-plane)
 	if redis_rpc_enabled:
-		print("* Listens for commands via Redis RPC (primary control channel).")
+		log.info("Redis RPC command listener is enabled.")
 	else:
-		print("Warning: Redis RPC command listener is disabled.")
+		log.warning("Redis RPC command listener is disabled.")
 
 	# TCP Socket
 	if tcp_socket_enabled:
-		print("* Listens on TCP Socket for requests from the Frappe BTU web application.")
+		log.info("TCP socket listener is enabled.")
 	else:
-		print("Warning: TCP Socket is disabled.")
+		log.warning("TCP socket listener is disabled.")
 
 	# Immediately on startup, Scheduler daemon should populate its internal queue with all BTU Task Schedule identifiers.
 	_ = await queue_full_refill(internal_queue)
@@ -93,6 +90,6 @@ async def main():
 				group.create_task(tcp_socket_listener(), name="TCP Socket Listener")
 
 		# Wait until all tasks are concluded (forever)
-		btu_scheduler.get_logger().info(f"All tasks have completed now: {task1.result()}, {task2.result()}, {task3.result()}")
+		log.info(f"All tasks have completed now: {task1.result()}, {task2.result()}, {task3.result()}")
 	except Exception as ex:
 		raise ex

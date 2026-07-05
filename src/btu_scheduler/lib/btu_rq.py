@@ -14,11 +14,13 @@ from zoneinfo import ZoneInfo
 
 import redis
 import rq
+import structlog
 
 # BTU
-from btu_scheduler import get_config, get_config_data, get_logger
+from btu_scheduler.lib.config import load_config
 
 NoneType = type(None)
+log = structlog.get_logger(__name__)
 
 
 def datetime_to_rq_date_string(some_datetime):
@@ -29,17 +31,19 @@ def create_connection(decode_responses=True):
 	"""
 	Creates a connection to the Redis database.
 	"""
+	config = load_config()
 	return redis.StrictRedis(
-		host=get_config().rq_host,
-		port=get_config().rq_port,
+		host=config.rq_host,
+		port=config.rq_port,
 		decode_responses=decode_responses,
 	)
 
 
 def create_raw_connection():
+	config = load_config()
 	return redis.StrictRedis(
-		host=get_config().rq_host,
-		port=get_config().rq_port,
+		host=config.rq_host,
+		port=config.rq_port,
 		decode_responses=False,
 		encoding=None,
 	)
@@ -73,7 +77,7 @@ class RQJobWrapper:
 	@staticmethod
 	def new_with_defaults() -> RQJobWrapper:
 		uuid_string: str = uuid.uuid4()  # example: 11f83e81-83ea-4df2-aa7e-cd12d8dec779
-		new_job_key = f"{get_config_data().jobs_site_prefix}|{uuid_string}"
+		new_job_key = f"{load_config().jobs_site_prefix}|{uuid_string}"
 		return RQJobWrapper(
 			job_key=new_job_key,  # erp.farmtopeople.com|11f83e81-83ea-4df2-aa7e-cd12d8dec779
 			fully_qualified_key=f"rq:job:{new_job_key}",
@@ -118,7 +122,7 @@ class RQJobWrapper:
 
 		# When using hset_multiple, the values must all be of the same Type.
 		# In the case below, an Array of Tuples, where the Tuple is (&str, &String)
-		print(f"Adding data for Job {self.job_key} to Redis database ...")
+		log.info(f"Adding data for Job {self.job_key} to Redis database ...")
 		redis_conn.hmset(self.fully_qualified_key, values_dict)
 		create_connection(decode_responses=False).hset(self.fully_qualified_key, "data", self.data)
 		if self.meta:
@@ -138,7 +142,7 @@ def DEL_enqueue_job_immediate(existing_job_id: str):
 
 	registry = StartedJobRegistry("default", connection=redis_conn)
 	queued_job_ids = registry.get_queue().job_ids
-	print(f"queued_job_ids: {queued_job_ids}")
+	log.debug("Queued RQ job ids", queued_job_ids=queued_job_ids)
 
 	this_job = rq.job.Job.fetch(existing_job_id, connection=redis_conn)
 
@@ -146,7 +150,7 @@ def DEL_enqueue_job_immediate(existing_job_id: str):
 	queue_key: str = f"rq:queue:{this_job.origin}"
 	some_result = redis_conn.sadd("rq:queues", queue_key)
 	if not some_result:
-		get_logger().error("Error during enqueue_job_immediate()")
+		log.error("Error during enqueue_job_immediate()")
 		raise IOError(some_result)
 
 	# Then add the Job's ID to the queue.
@@ -154,6 +158,6 @@ def DEL_enqueue_job_immediate(existing_job_id: str):
 	push_result = redis_conn.rpush(queue_key, existing_job_id)
 	if not push_result:
 		raise IOError(push_result)
-	get_logger.info(
+	log.info(
 		f"Enqueued RQ Job '{existing_job_id}' for immediate execution. Length of list after 'rpush' operation: {push_result}"
 	)

@@ -1,18 +1,16 @@
 import pathlib
-import pprint
 import urllib.parse
-from functools import lru_cache
 from typing import Literal
 from zoneinfo import ZoneInfo
 
 import structlog
 from platformdirs import user_config_dir
-from pydantic import Field, PrivateAttr, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from btu_scheduler._vendor.config_logging import LogLevel, XdgSettings, bootstrap_app
 
 APP_NAME = "btu-scheduler"
-_SECRET_FIELDS = frozenset({"sql_password", "webserver_token", "slack_webhook_url"})
+_settings: "SchedulerSettings | None" = None
 
 
 def get_env_file_path() -> pathlib.Path:
@@ -49,7 +47,6 @@ class SchedulerSettings(XdgSettings):
 	)
 
 	_sql_connection_string: str | None = None
-	_logger: structlog.stdlib.BoundLogger | None = PrivateAttr(default=None)
 
 	@field_validator("sql_type", mode="before")
 	@classmethod
@@ -69,9 +66,6 @@ class SchedulerSettings(XdgSettings):
 			self.log_level = self.tracing_level
 		return self
 
-	def get_sql_type(self) -> str:
-		return self.sql_type
-
 	def get_sql_connection_string(self) -> str:
 		if not self._sql_connection_string:
 			user = urllib.parse.quote(self.sql_user)
@@ -88,41 +82,26 @@ class SchedulerSettings(XdgSettings):
 				raise ValueError(f"Unsupported sql_type: {self.sql_type}. Supported types: 'postgres', 'mariadb'")
 		return self._sql_connection_string
 
-	def get_logger(self):
-		if not self._logger:
-			self._logger = structlog.get_logger("btu_scheduler")
-		return self._logger
-
 	def timezone(self) -> ZoneInfo:
 		return ZoneInfo(self.time_zone_string)
 
-	def as_dictionary(self, *, redact_secrets: bool = False) -> dict:
-		data = self.model_dump(mode="json")
-		if redact_secrets:
-			for key in _SECRET_FIELDS:
-				if data.get(key):
-					data[key] = "***"
-		return data
 
-	def print_config(self):
-		print()
-		pprint.PrettyPrinter(indent=4, compact=False).pprint(self.as_dictionary(redact_secrets=True))
-		print()
+def bootstrap_scheduler(*, handle_signals: bool = False) -> tuple[SchedulerSettings, structlog.stdlib.BoundLogger]:
+	global _settings  # noqa: PLW0603
+	settings, log = bootstrap_app(SchedulerSettings, app_name=APP_NAME, handle_signals=handle_signals)
+	_settings = settings
+	return settings, log
 
 
-@lru_cache(maxsize=1)
 def load_config() -> SchedulerSettings:
-	settings, _log = bootstrap_app(SchedulerSettings, app_name=APP_NAME, handle_signals=False)
-	return settings
-
-
-def load_config_with_signal_handlers() -> SchedulerSettings:
-	load_config.cache_clear()
-	settings, _log = bootstrap_app(SchedulerSettings, app_name=APP_NAME, handle_signals=True)
-	load_config.cache_clear()
-	return settings
+	if _settings is None:
+		settings, _log = bootstrap_scheduler(handle_signals=False)
+		return settings
+	return _settings
 
 
 def reload_config() -> SchedulerSettings:
-	load_config.cache_clear()
-	return load_config()
+	global _settings  # noqa: PLW0603
+	_settings = None
+	settings, _log = bootstrap_scheduler(handle_signals=False)
+	return settings
