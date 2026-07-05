@@ -36,7 +36,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-development = ["twine", "ruff>=0.14.0",]
+development = ["twine", "ruff>=0.14.0", "ventwig"]
 
 [project.scripts]
 btu-py = "btu_py.cli:entry_point"
@@ -47,3 +47,10 @@ line-length = 120  # Default is 88
 
 [tool.ruff.format]
 indent-style = "tab"
+
+[[tool.ventwig.sources]]
+name          = "brian_appkit"
+local_path    = "vendor/config_logging"
+upstream      = "https://github.com/brian-pond/brian_appkit_config_py.git"
+upstream_path = "src/brian_appkit"    # optional — defaults to repo root
+ref           = "main"          # branch name or tag
