@@ -2,7 +2,6 @@
 
 # NOTE: Functions here should not depend on other btu_scheduler modules or namespaces.
 
-import ssl
 import time
 from datetime import datetime as DateTimeType
 
@@ -11,19 +10,6 @@ import structlog
 
 log = structlog.get_logger(__name__)
 
-
-def send_message_to_slack(app_config, message_string: str) -> bool:
-	"""
-	Send a message string to Slack using Webhooks API.
-	"""
-	from slack_sdk.webhook import WebhookClient
-
-	if not app_config.slack_webhook_url:
-		raise RuntimeError("Cannot send message to Slack: Configuration is missing 'slack_webhook_url'")
-	webhook_url = app_config.slack_webhook_url
-	webhook = WebhookClient(url=webhook_url, ssl=ssl._create_unverified_context())
-	response = webhook.send(text=message_string)
-	return response.status_code == 200 and response.body == "ok"
 
 
 def is_port_in_use(port: int) -> bool:

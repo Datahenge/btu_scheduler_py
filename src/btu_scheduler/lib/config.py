@@ -38,7 +38,6 @@ class SchedulerSettings(XdgSettings):
 	disable_redis_rpc: bool = False
 	disable_tcp_socket: bool = False
 	webserver_host_header: str | None = None
-	slack_webhook_url: str | None = None
 	tracing_level: LogLevel | None = Field(
 		default=None,
 		description="Compatibility alias for log_level; prefer BTU_SCHEDULER_LOG_LEVEL.",

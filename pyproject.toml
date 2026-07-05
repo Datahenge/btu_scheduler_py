@@ -35,8 +35,7 @@ dependencies = [
 	"pydantic-settings>=2.0.0",
 	"platformdirs>=4.0.0",
 	"python-dotenv>=1.0.0",
- 	"slack_sdk~=3.31.0",
-	"structlog>=24.0.0",
+ "structlog>=24.0.0",
     "temporal_lib>=0.1.2",
 ]
 

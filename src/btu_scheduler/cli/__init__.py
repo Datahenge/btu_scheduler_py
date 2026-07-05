@@ -13,7 +13,7 @@ import click
 from btu_scheduler import __version__
 from btu_scheduler._vendor.config_logging import ConfigurationError
 
-_SECRET_FIELDS = frozenset({"sql_password", "webserver_token", "slack_webhook_url"})
+_SECRET_FIELDS = frozenset({"sql_password", "webserver_token"})
 
 
 def _redacted_config_dict(settings) -> dict:
@@ -128,7 +128,6 @@ test_choices: list = [
 	"frappe-ping",
 	"pickler",
 	"redis",
-	"slack",
 	"sql",
 	"tcp-echo",
 	"tcp-ping",
@@ -176,11 +175,6 @@ def cli_test(command, task_schedule_id):
 				click.echo("Redis connection successful.")
 			except Exception as ex:
 				click.echo(f"Error: {ex}")
-
-		case "slack":
-			from btu_scheduler.lib.diagnostics import diagnose_slack
-
-			diagnose_slack()
 
 		case "sql":
 			from btu_scheduler.lib.diagnostics import diagnose_sql

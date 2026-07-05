@@ -29,30 +29,6 @@ async def diagnose_sql(quiet=False):
 		print(f"Number of records in DocType table = {sql_row['record_count']}")
 
 
-def diagnose_slack():
-	import ssl
-
-	from slack_sdk import WebClient
-
-	from btu_scheduler.lib.config import load_config
-	from btu_scheduler.lib.utils import get_datetime_string, send_message_to_slack
-
-	# Test One
-	client = WebClient(ssl=ssl._create_unverified_context())
-	api_response = client.api_test()
-	if api_response.get("ok", False):
-		print("\u2713 First test successful.")
-	else:
-		print("\u2717 First failed.")
-
-	# Test Two
-	message = f"{get_datetime_string()} : This is a test initiated by the 'btu-scheduler' CLI application.\nNothing to see here; move along!"
-	try:
-		send_message_to_slack(load_config(), message)
-		print("\u2713 Second test successful.  Please examine Slack to find a test message.")
-	except Exception as ex:
-		print(f"\u2717 Second test failed: {ex}")
-
 
 def diagnose_frappe_ping(debug_mode=False):
 	"""
