@@ -9,10 +9,8 @@ import requests
 import structlog
 
 from btu_scheduler.lib import btu_cron
-from btu_scheduler.lib.btu_rq import RQJobWrapper
 from btu_scheduler.lib.config import load_config
 from btu_scheduler.lib.sql import get_task_by_id, get_task_schedule_by_id
-from btu_scheduler.lib.structs.sanchez import get_pickled_function_from_web
 from btu_scheduler.lib.utils import get_frappe_base_url
 
 NoneType = type(None)
@@ -42,17 +40,6 @@ class BtuTask:
 			path_to_function=task_data["path_to_function"],
 			max_task_duration=task_data["max_task_duration"],
 		)
-
-	async def convert_to_wrapped_rq_job(self) -> RQJobWrapper:
-		"""
-		Use a BTU Task record to construct an RQ Job Wrapper; don't modify Redis yet.
-		"""
-		wrapped_job = RQJobWrapper.new_with_defaults()
-		wrapped_job.description = self.desc_short
-		byte_result = get_pickled_function_from_web(self.task_key, None)
-		wrapped_job.data = byte_result
-		wrapped_job.timeout = self.max_task_duration
-		return wrapped_job
 
 
 @dataclass
@@ -85,19 +72,6 @@ class BtuTaskSchedule:
 			cron_string=schedule_data["cron_string"],
 			cron_timezone=ZoneInfo(schedule_data["cron_timezone"]),
 		)
-
-	async def to_rq_job_wrapper(self):
-		"""
-		Given a BTU Task Schedule, construct an instance of RQJobWrapper; does not modify Redis.
-		"""
-		wrapped_job = RQJobWrapper.new_with_defaults()
-		wrapped_job.description = self.task_description
-		wrapped_job.origin = self.queue_name
-
-		task = await BtuTask.init_from_task_key(self.task_key)
-		wrapped_job.data = await get_pickled_function_from_web(self.task_key, self.id)
-		wrapped_job.timeout = task.max_task_duration
-		return wrapped_job
 
 	def get_next_runtimes(self, from_utc_datetime=None, number_results=1) -> list[DateTimeType]:
 		return btu_cron.tz_cron_to_utc_datetimes(

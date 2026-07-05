@@ -115,26 +115,6 @@ async def get_task_by_id(task_id: str) -> dict:
 	return sql_row
 
 
-async def get_enabled_tasks() -> list:
-	"""
-	Returns a list of all enable BTU Task records from Frappe SQL database.
-	"""
-
-	query_string = f"""
-		SELECT
-			 name
-			,desc_short
-		FROM
-			{quote("tabBTU Task")}
-		WHERE
-			docstatus = 1
-		AND task_type = 'Persistent';
-	"""
-
-	database = await get_database()
-	sql_rows = await database.fetch_all(query_string)
-	return sql_rows
-
 
 async def get_enabled_task_schedules() -> list:
 	"""

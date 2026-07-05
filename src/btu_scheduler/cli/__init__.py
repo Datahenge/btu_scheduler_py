@@ -13,7 +13,6 @@ import click
 from btu_scheduler import __version__
 from btu_scheduler._vendor.config_logging import ConfigurationError
 
-VERBOSE_MODE = False
 _SECRET_FIELDS = frozenset({"sql_password", "webserver_token", "slack_webhook_url"})
 
 
@@ -47,21 +46,10 @@ def _require_config(load_fn):
 # ========
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option(version=__version__)
-@click.option(
-	"--verbose",
-	"-vb",
-	is_flag=True,
-	default=False,
-	help="Prefix to any command for verbosity.",
-)
-def entry_point(verbose):
+def entry_point():
 	"""
 	CLI interface for BTU Scheduler
 	"""
-	if verbose:
-		global VERBOSE_MODE
-		VERBOSE_MODE = True
-		click.echo(f"Verbose mode is {'on' if verbose else 'off'}.")
 
 
 # ========
@@ -243,21 +231,3 @@ def cli_test(command, task_schedule_id):
 			raise click.ClickException(
 				f"Unhandled subcommand '{command}'. Please choose one of:\n    {test_choices_string}"
 			)
-
-
-@entry_point.command("service-status")
-def cli_service_status():
-	"""
-	Check the status of various systemd services
-	"""
-	# Falcon
-	command_list = ["sudo", "systemctl", "status", "btu_scheduler.service"]
-	subprocess.run(command_list, check=False, stderr=subprocess.STDOUT)
-
-	# Frappe Workers
-	command_list = [
-		"sudo",
-		"systemctl",
-		"status",
-	]
-	subprocess.run(command_list, check=False, stderr=subprocess.STDOUT)

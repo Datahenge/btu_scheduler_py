@@ -39,15 +39,6 @@ def create_connection(decode_responses=True):
 	)
 
 
-def create_raw_connection():
-	config = load_config()
-	return redis.StrictRedis(
-		host=config.rq_host,
-		port=config.rq_port,
-		decode_responses=False,
-		encoding=None,
-	)
-
 
 @dataclass
 class RQJobWrapper:
@@ -99,65 +90,3 @@ class RQJobWrapper:
 			rq_job_object=None,
 		)
 
-	def DEL_create_only(self):
-		"""
-		Save the RQ struct to the Redis database, but do not enqueue.
-		"""
-		redis_conn = create_connection()
-
-		# NOTE: Cannot pass NoneTypes here
-		values_dict = {
-			"status": self.status,
-			"worker_name": self.worker_name,
-			"ended_at": self.ended_at or "",
-			"result_ttl": self.result_ttl or "",
-			"enqueued_at": self.enqueued_at or "",
-			"last_heartbeat": datetime_to_rq_date_string(self.last_heartbeat) if self.last_heartbeat else "",
-			"origin": self.origin,
-			"description": self.description,
-			"started_at": self.started_at or "",
-			"created_at": datetime_to_rq_date_string(self.created_at),
-			"timeout": self.timeout,
-		}
-
-		# When using hset_multiple, the values must all be of the same Type.
-		# In the case below, an Array of Tuples, where the Tuple is (&str, &String)
-		log.info(f"Adding data for Job {self.job_key} to Redis database ...")
-		redis_conn.hmset(self.fully_qualified_key, values_dict)
-		create_connection(decode_responses=False).hset(self.fully_qualified_key, "data", self.data)
-		if self.meta:
-			redis_conn.hset(self.self.fully_qualified_key, "meta", self.meta)
-
-	def DEL_create_and_enqueue(self):
-		pass
-
-
-def DEL_enqueue_job_immediate(existing_job_id: str):
-	"""
-	Add a pre-existing RQ Job to a queue, so a worker can pick it up.
-	"""
-	redis_conn = create_connection()
-
-	from rq.registry import StartedJobRegistry
-
-	registry = StartedJobRegistry("default", connection=redis_conn)
-	queued_job_ids = registry.get_queue().job_ids
-	log.debug("Queued RQ job ids", queued_job_ids=queued_job_ids)
-
-	this_job = rq.job.Job.fetch(existing_job_id, connection=redis_conn)
-
-	# First, add the Queue name to 'rq:queues' (it could be there already)
-	queue_key: str = f"rq:queue:{this_job.origin}"
-	some_result = redis_conn.sadd("rq:queues", queue_key)
-	if not some_result:
-		log.error("Error during enqueue_job_immediate()")
-		raise IOError(some_result)
-
-	# Then add the Job's ID to the queue.
-	# NOTE: The return value of 'rpush' is an integer, representing the length of the List, after the completion of the push operation.
-	push_result = redis_conn.rpush(queue_key, existing_job_id)
-	if not push_result:
-		raise IOError(push_result)
-	log.info(
-		f"Enqueued RQ Job '{existing_job_id}' for immediate execution. Length of list after 'rpush' operation: {push_result}"
-	)

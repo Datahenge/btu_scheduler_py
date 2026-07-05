@@ -10,9 +10,6 @@ from btu_scheduler.lib.btu_rq import create_connection
 from btu_scheduler.lib.sql import get_enabled_task_schedules
 from btu_scheduler.lib.structs import BtuTaskSchedule
 
-# static RQ_SCHEDULER_NAMESPACE_PREFIX: &'static str = "rq:scheduler_instance:";
-# static RQ_KEY_SCHEDULER: &'static str = "rq:scheduler";
-# static RQ_KEY_SCHEDULER_LOCK: &'static str = "rq:scheduler_lock";
 RQ_KEY_SCHEDULED_TASKS = "btu_scheduler:task_execution_times"
 DST_FIRED_CACHE_TTL_SECS = 90_000  # 25 hours — long enough to outlast any DST transition
 log = structlog.get_logger(__name__)

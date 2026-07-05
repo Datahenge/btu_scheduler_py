@@ -208,6 +208,14 @@ fall-back duplicates from appearing in result sets when `N >= 2` results are req
 This layer helps at scheduling time and provides correct behavior for callers that
 request multiple results (e.g., future tooling, diagnostics).
 
+> **Note:** As of this writing, the scheduler's normal path calls `get_next_runtimes()`
+> with no arguments, which defaults to `number_results=1`.  With only one result to
+> fill, the consecutive-pair comparison never has a "previous" to check against —
+> Layer 1 is **currently dormant in production**.  Layer 2 (the Redis cache) is the
+> sole active DST protection in the live scheduling path.  Layer 1 will become active
+> if any caller requests `number_results >= 2`, such as a future diagnostic command or
+> pre-scheduling lookahead.
+
 ### Layer 2 — Local-slot execution cache (`scheduler.py`)
 
 `run_immediate_scheduled_task` checks a Redis key before every enqueue:

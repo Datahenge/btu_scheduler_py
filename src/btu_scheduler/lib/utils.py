@@ -2,75 +2,22 @@
 
 # NOTE: Functions here should not depend on other btu_scheduler modules or namespaces.
 
-import inspect
 import ssl
 import time
 from datetime import datetime as DateTimeType
 
 # Third Party
 import structlog
-from slack_sdk.webhook import WebhookClient
 
 log = structlog.get_logger(__name__)
-
-
-def validate_datatype(argument_name, argument_value, expected_type, mandatory=False):
-	"""
-	A helpful generic function for checking a variable's datatype, and throwing an error on mismatches.
-	Absolutely necessary when dealing with extremely complex Python programs that talk to SQL, HTTP, Redis, etc.
-
-	NOTE: expected_type can be a single Type, or a tuple of Types.
-	"""
-	# Throw error if missing mandatory argument.
-	NoneType = type(None)
-	if mandatory and isinstance(argument_value, NoneType):
-		raise ValueError(f"Argument '{argument_name}' is mandatory.")
-
-	if not argument_value:
-		return argument_value  # datatype is going to be a NoneType, which is okay if not mandatory.
-
-	# Check argument type
-	if not isinstance(argument_value, expected_type):
-		if isinstance(expected_type, tuple):
-			expected_type_names = [each.__name__ for each in expected_type]
-			msg = f"Argument '{argument_name}' should be one of these types: '{', '.join(expected_type_names)}'"
-			msg += f"\nFound a {type(argument_value).__name__} with value '{argument_value}' instead."
-		else:
-			msg = f"Argument '{argument_name}' should be of type = '{expected_type.__name__}'"
-			msg += f"<br>Found a {type(argument_value).__name__} with value '{argument_value}' instead."
-		raise ValueError(msg)
-
-	# Otherwise, return the argument to the caller.
-	return argument_value
-
-
-def whatis(message):
-	"""
-	This function can be called to assist in debugging, showing an object's value, type, and call stack.
-	"""
-	inspected_stack = inspect.stack()
-
-	direct_caller = inspected_stack[1]
-	direct_caller_linenum = direct_caller[2]
-
-	parent_caller = inspected_stack[2]
-	parent_caller_function = parent_caller[3]
-	parent_caller_path = parent_caller[1]
-	parent_caller_line = parent_caller[2]
-
-	message_type = str(type(message)).replace("<", "").replace(">", "")
-	msg = "---> DEBUG (dw_etl.generics.whatis)\n"
-	msg += f"* Initiated on Line: {direct_caller_linenum}"
-	msg += f"\n  * Value: {message}\n  * Type: {message_type}"
-	msg += f"\n  * Caller: {parent_caller_function}"
-	msg += f"\n  * Caller Path: {parent_caller_path}\n  * Caller Line: {parent_caller_line}\n"
-	log.debug(msg)
 
 
 def send_message_to_slack(app_config, message_string: str) -> bool:
 	"""
 	Send a message string to Slack using Webhooks API.
 	"""
+	from slack_sdk.webhook import WebhookClient
+
 	if not app_config.slack_webhook_url:
 		raise RuntimeError("Cannot send message to Slack: Configuration is missing 'slack_webhook_url'")
 	webhook_url = app_config.slack_webhook_url
@@ -135,57 +82,12 @@ class Stopwatch:
 		return seconds_elapsed_start
 
 
-class DictToDot(dict):
-	"""
-	Makes a dictionary accessible via dot notation.
-	"""
-
-	def __init__(self, *args, **kwargs):
-		super(DictToDot, self).__init__(*args, **kwargs)
-		for arg in args:
-			if isinstance(arg, dict):
-				for k, v in arg.items():
-					self[k] = v
-
-		if kwargs:
-			for k, v in kwargs.items():
-				self[k] = v
-
-	def __getattr__(self, attr):
-		return self.get(attr)
-
-	def __setattr__(self, key, value):
-		self.__setitem__(key, value)
-
-	def __setitem__(self, key, value):
-		super(DictToDot, self).__setitem__(key, value)
-		self.__dict__.update({key: value})
-
-	def __delattr__(self, item):
-		self.__delitem__(item)
-
-	def __delitem__(self, key):
-		super(DictToDot, self).__delitem__(key)
-		del self.__dict__[key]
-
-
 def get_datetime_string():
 	"""
 	Return the current datetime in a easily readable format.
 	"""
 	return DateTimeType.now().strftime("%Y-%m-%d %H:%M:%S")
 
-
-def utc_to_rq_string(datetime_utc: DateTimeType) -> str:
-	#  The format is VERY important.  If the UTC DateTime is not correctly formatted,
-	#  it *will crash* the Python RQ Worker.
-
-	# 2022-12-01T08:32:20.580242150Z
-	# 2022-12-01T08:32:20Z
-
-	result = datetime_utc.isoformat()
-	log.debug("Formatted UTC datetime for RQ.", rq_datetime=result)
-	return result
 
 
 def get_frappe_base_url() -> str:
