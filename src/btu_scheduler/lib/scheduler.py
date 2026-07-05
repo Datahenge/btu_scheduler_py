@@ -14,7 +14,14 @@ from btu_scheduler.lib.structs import BtuTaskSchedule
 # static RQ_KEY_SCHEDULER: &'static str = "rq:scheduler";
 # static RQ_KEY_SCHEDULER_LOCK: &'static str = "rq:scheduler_lock";
 RQ_KEY_SCHEDULED_TASKS = "btu_scheduler:task_execution_times"
+DST_FIRED_CACHE_TTL_SECS = 90_000  # 25 hours — long enough to outlast any DST transition
 log = structlog.get_logger(__name__)
+
+
+def _dst_fired_cache_key(task_schedule_id: str, utc_datetime: DateTimeType, cron_timezone: ZoneInfo) -> str:
+	"""Redis key recording that a local time slot was executed (DST fall-back guard)."""
+	local_dt = utc_datetime.astimezone(cron_timezone)
+	return f"btu:fired:{task_schedule_id}:{local_dt.strftime('%Y-%m-%d:%H:%M')}"
 
 
 @dataclass
@@ -259,11 +266,32 @@ async def run_immediate_scheduled_task(task_schedule_instance: RQScheduledTask, 
 		)
 		return
 
+	# 3. DST fall-back guard: skip if this local time slot already fired today.
+	#    The scheduler is stateless by design, so after a fall-back the re-queue
+	#    calculation has no memory of what already executed.  This cache closes that gap.
+	dst_cache_key = _dst_fired_cache_key(
+		task_schedule.id,
+		task_schedule_instance.next_execution_as_datetime_utc,
+		task_schedule.cron_timezone,
+	)
+	if redis_conn.exists(dst_cache_key):
+		local_slot = task_schedule_instance.next_execution_as_datetime_utc.astimezone(task_schedule.cron_timezone)
+		log.warning(
+			f"DST duplicate suppressed: Task Schedule {task_schedule.id} already fired for "
+			f"local slot {local_slot:%Y-%m-%d %H:%M} ({task_schedule.cron_timezone}). Skipping re-fire."
+		)
+		redis_conn.zrem(RQ_KEY_SCHEDULED_TASKS, str(task_schedule_instance.to_tsik()))
+		await internal_queue.put(task_schedule_instance.task_schedule_id)
+		return
+
 	try:
 		task_schedule.enqueue_for_next_available_worker()
 	except Exception as ex:
 		log.error(f"Error while attempting to queue job for execution: {ex}")
 		return
+
+	# Record this local slot as fired so DST fall-back cannot re-fire it.
+	redis_conn.setex(dst_cache_key, DST_FIRED_CACHE_TTL_SECS, "1")
 
 	# IMPORTANT: Remove this Task from the BTU Schedule Key (so it doesn't accidentally get executed twice)
 	redis_result = redis_conn.zrem(RQ_KEY_SCHEDULED_TASKS, str(task_schedule_instance.to_tsik()))

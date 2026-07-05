@@ -112,34 +112,36 @@ class TestDSTSpringForward(unittest.TestCase):
 	2026-03-08: clocks spring forward 2:00 AM EST → 3:00 AM EDT (7:00 UTC).
 	The 2:00–2:59 AM window does not exist in Eastern time on this day.
 
-	Requires croniter >= 6.0.0 for correct DST gap handling.
+	When a cron falls in the gap, croniter fires at the transition point
+	(3:00 AM EDT = 07:00 UTC) — the first valid moment after the gap.
+	This is correct: 30 minutes late is far less surprising than 24 hours late.
+
+	Requires croniter >= 6.2.3.
 	"""
 
-	def test_cron_in_spring_forward_gap_skips_to_next_valid_day(self):
-		# Start: 1:59 AM EST on spring-forward day (06:59 UTC)
+	def test_cron_in_spring_forward_gap_fires_at_transition_point(self):
+		# Start: 1:59 AM EST on spring-forward day (06:59 UTC).
+		# 2:30 AM does not exist; croniter fires at 3:00 AM EDT (transition point).
 		start = datetime(2026, 3, 8, 6, 59, 0, tzinfo=UTC)
 		result = _run("30 2 * * *", EASTERN, start)[0]
 		local_result = result.astimezone(EASTERN)
 
-		# The result must NOT be on the same day as the gap
-		self.assertGreater(local_result.date(), datetime(2026, 3, 8).date(),
-			msg="Cron in DST gap should not produce a result on the same day as the gap")
+		self.assertEqual(local_result.date(), datetime(2026, 3, 8).date(),
+			msg="Fires on the same day at the transition point, not 24 hours later")
+		self.assertEqual(local_result.hour, 3)
+		self.assertEqual(local_result.minute, 0)
 
-		# The local time should match the cron pattern (hour=2, minute=30)
-		self.assertEqual(local_result.hour, 2)
-		self.assertEqual(local_result.minute, 30)
-
-	def test_result_after_spring_forward_uses_edt_offset(self):
-		# After spring forward, Eastern is EDT (UTC-4), so 2:30 AM EDT = 06:30 UTC
+	def test_result_at_spring_forward_transition_uses_edt_offset(self):
+		# 2:30 AM falls in the gap; croniter fires at 3:00 AM EDT = 07:00 UTC.
 		start = datetime(2026, 3, 8, 6, 59, 0, tzinfo=UTC)
 		result = _run("30 2 * * *", EASTERN, start)[0]
 		local_result = result.astimezone(EASTERN)
 
 		self.assertEqual(local_result.utcoffset(), timedelta(hours=-4),
-			msg="Post-spring-forward result should have EDT offset (UTC-4)")
-		# 2:30 AM EDT = 06:30 UTC on whatever day croniter lands on
-		self.assertEqual(result.hour, 6)
-		self.assertEqual(result.minute, 30)
+			msg="Result at spring-forward transition should use EDT offset (UTC-4)")
+		# 3:00 AM EDT = 07:00 UTC
+		self.assertEqual(result.hour, 7)
+		self.assertEqual(result.minute, 0)
 
 
 class TestDSTFallBack(unittest.TestCase):

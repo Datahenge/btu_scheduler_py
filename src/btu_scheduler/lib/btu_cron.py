@@ -149,4 +149,13 @@ def tz_cron_to_utc_datetimes(
 	iterator = croniter(cron_str, from_local_datetime)
 
 	utc_zone = ZoneInfo("UTC")
-	return [iterator.get_next(DateTimeType).astimezone(utc_zone) for _ in range(number_of_results)]
+	results: list[DateTimeType] = []
+	while len(results) < number_of_results:
+		candidate = iterator.get_next(DateTimeType).astimezone(utc_zone)
+		if results:
+			prev = results[-1].astimezone(cron_timezone)
+			cand = candidate.astimezone(cron_timezone)
+			if prev.date() == cand.date() and prev.hour == cand.hour and prev.minute == cand.minute:
+				continue  # fall-back DST duplicate: same local slot, discard and advance
+		results.append(candidate)
+	return results
