@@ -1,6 +1,7 @@
 """btu_scheduler/daemon/__init__.py"""
 
 import asyncio
+import threading
 
 import structlog
 
@@ -9,6 +10,12 @@ from btu_scheduler.lib.scheduler import queue_full_refill
 from btu_scheduler.lib.diagnostics import diagnose_redis, diagnose_sql
 
 log = structlog.get_logger(__name__)
+
+
+async def _wait_for_shutdown(shutdown_event: threading.Event) -> None:
+	"""Block until SIGTERM/SIGINT sets the bootstrap shutdown event."""
+	loop = asyncio.get_running_loop()
+	await loop.run_in_executor(None, shutdown_event.wait)
 
 
 async def main():
@@ -44,25 +51,29 @@ async def main():
 	# Immediately on startup, Scheduler daemon should populate its internal queue with all BTU Task Schedule identifiers.
 	_ = await queue_full_refill(internal_queue)
 
-	# handle the failure of any tasks in the group
-	try:
-		# create a taskgroup
-		async with asyncio.TaskGroup() as group:
-			task1 = group.create_task(
-				internal_queue_consumer(internal_queue),
-				name="Internal Queue - Consumer",
-			)
-			task2 = group.create_task(
-				internal_queue_producer(internal_queue),
-				name="Internal Queue - Producer",
-			)
-			task3 = group.create_task(
-				review_next_execution_times(internal_queue),
-				name="Review Next Execution Times",
-			)
-			group.create_task(redis_command_listener(internal_queue), name="Redis RPC Command Listener")
+	tasks = [
+		asyncio.create_task(internal_queue_consumer(internal_queue), name="Internal Queue - Consumer"),
+		asyncio.create_task(internal_queue_producer(internal_queue), name="Internal Queue - Producer"),
+		asyncio.create_task(review_next_execution_times(internal_queue), name="Review Next Execution Times"),
+		asyncio.create_task(redis_command_listener(internal_queue), name="Redis RPC Command Listener"),
+	]
+	shutdown_task = asyncio.create_task(_wait_for_shutdown(settings.shutdown_event), name="Shutdown Watcher")
 
-		# Wait until all tasks are concluded (forever)
-		log.info(f"All tasks have completed now: {task1.result()}, {task2.result()}, {task3.result()}")
-	except Exception:
-		raise
+	try:
+		done, _pending = await asyncio.wait(
+			[*tasks, shutdown_task],
+			return_when=asyncio.FIRST_COMPLETED,
+		)
+
+		for task in done:
+			if task is shutdown_task:
+				log.info("BTU Scheduler daemon shutting down")
+				continue
+			if not task.cancelled() and (exc := task.exception()) is not None:
+				raise exc
+	finally:
+		for task in (*tasks, shutdown_task):
+			task.cancel()
+		await asyncio.gather(*tasks, shutdown_task, return_exceptions=True)
+
+	log.info("BTU Scheduler daemon stopped")

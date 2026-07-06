@@ -58,12 +58,10 @@ async def internal_queue_producer(shared_queue: asyncio.Queue[str]) -> None:
 			log.debug(
 				f"Producer: {elapsed_seconds} seconds have elapsed.  Time for a full-write of Task Schedule Keys in Redis!"
 			)
-			result = await scheduler.queue_full_refill(shared_queue)
+			result = await scheduler.queue_full_refill(shared_queue, check_rq=True)
 			if result:
 				log.debug(f"  * Internal queue contains a total of {shared_queue.qsize()} values.")
 				scheduler.rq_print_scheduled_tasks()  # log the Task Schedule:
-			else:
-				log.warning("No Task Schedules found in the database.  Unable to repopulate the internal queue.")
 			stopwatch.reset()  # reset the stopwatch and begin a new countdown
 
 		await asyncio.sleep(1)  # blocking request, yields controls to another coroutine for a while.

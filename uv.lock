@@ -132,7 +132,6 @@ dependencies = [
     { name = "redis" },
     { name = "requests" },
     { name = "rq" },
-    { name = "slack-sdk" },
     { name = "structlog" },
     { name = "temporal-lib" },
 ]
@@ -158,7 +157,6 @@ requires-dist = [
     { name = "requests", specifier = "==2.32.5" },
     { name = "rq", specifier = "==1.15.1" },
     { name = "ruff", marker = "extra == 'development'", specifier = ">=0.14.0" },
-    { name = "slack-sdk", specifier = "~=3.31.0" },
     { name = "structlog", specifier = ">=24.0.0" },
     { name = "temporal-lib", specifier = ">=0.1.2" },
     { name = "twine", marker = "extra == 'development'" },
@@ -1037,15 +1035,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81", size = 34031, upload-time = "2024-12-04T17:35:28.174Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050, upload-time = "2024-12-04T17:35:26.475Z" },
-]
-
-[[package]]
-name = "slack-sdk"
-version = "3.31.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a5/e3/4a2491cbf793bb8da8a51120207df8c097faeda42bf720f7acf7c40e4ca8/slack_sdk-3.31.0.tar.gz", hash = "sha256:740d2f9c49cbfcbd46fca56b4be9d527934c225312aac18fd2c0fca0ef6bc935", size = 230928, upload-time = "2024-07-04T16:40:39.019Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/57/04/f4517d8403c49910f45ad91205de352f2eccf12ae28865a27da7d7d05bf6/slack_sdk-3.31.0-py2.py3-none-any.whl", hash = "sha256:a120cc461e8ebb7d9175f171dbe0ded37a6878d9f7b96b28e4bad1227399047b", size = 289845, upload-time = "2024-07-04T16:40:36.34Z" },
 ]
 
 [[package]]

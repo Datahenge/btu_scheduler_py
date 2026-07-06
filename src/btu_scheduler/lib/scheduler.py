@@ -320,14 +320,20 @@ def clear_all_scheduled_tasks() -> bool:
 	return True
 
 
-async def queue_full_refill(internal_queue: asyncio.Queue[str]) -> int:
+async def queue_full_refill(internal_queue: asyncio.Queue[str], *, check_rq: bool = False) -> int:
 	"""
 	Queries the Frappe database, adding every active Task Schedule to BTU internal queue.
+
+	When ``check_rq`` is True, log a warning if enabled schedules exist in SQL but none
+	are present in Redis (the safety net should have repopulated RQ by then).
 	"""
 	rows_added = 0
 	enabled_schedules = await get_enabled_task_schedules()
+	if check_rq and enabled_schedules and not rq_get_scheduled_tasks():
+		log.warning(
+			"Enabled Task Schedules exist in the database but none are scheduled in Redis."
+		)
 	if not enabled_schedules:
-		log.debug("queue_full_refill() : No enabled Task Schedules found in the database.")
 		return 0
 
 	for each_row in enabled_schedules:  # each_row is a dictionary with 2 keys: 'name' and 'desc_short'
