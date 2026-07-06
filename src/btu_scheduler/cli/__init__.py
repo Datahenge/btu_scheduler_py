@@ -145,7 +145,9 @@ def cli_test():
 		diagnose_frappe_ping,
 		diagnose_pickler,
 		diagnose_redis,
+		diagnose_redis_version,
 		diagnose_rq_hello_world,
+		diagnose_rq_workers,
 		diagnose_sql,
 	)
 
@@ -156,6 +158,14 @@ def cli_test():
 	try:
 		diagnose_redis()
 		click.echo("Connection OK.")
+		passed += 1
+	except Exception as ex:
+		click.echo(f"FAILED: {ex}")
+		failed += 1
+
+	click.echo("\n--- Redis Version ---")
+	try:
+		diagnose_redis_version()
 		passed += 1
 	except Exception as ex:
 		click.echo(f"FAILED: {ex}")
@@ -188,6 +198,14 @@ def cli_test():
 	click.echo("\n--- RQ Hello World ---")
 	try:
 		diagnose_rq_hello_world()
+		passed += 1
+	except Exception as ex:
+		click.echo(f"FAILED: {ex}")
+		failed += 1
+
+	click.echo("\n--- RQ Workers ---")
+	try:
+		diagnose_rq_workers()
 		passed += 1
 	except Exception as ex:
 		click.echo(f"FAILED: {ex}")
