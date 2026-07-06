@@ -13,7 +13,7 @@ import click
 from btu_scheduler import __version__
 from btu_scheduler._vendor.config_logging import ConfigurationError
 
-_SECRET_FIELDS = frozenset({"sql_password", "webserver_token"})
+_SECRET_FIELDS = frozenset({"sql_password", "webserver_token", "rq_password"})
 
 
 def _redacted_config_dict(settings) -> dict:
@@ -129,27 +129,15 @@ test_choices: list = [
 	"pickler",
 	"redis",
 	"sql",
-	"tcp-echo",
-	"tcp-ping",
-	"tcp-create-task-schedule",
-	"tcp-cancel-task-schedule",
 	"test-rq-hello-world",
 ]
 
 
 @entry_point.command("test")
 @click.argument("command", type=click.Choice(test_choices, case_sensitive=False))
-@click.argument("task_schedule_id", required=False)
-def cli_test(command, task_schedule_id):
+def cli_test(command):
 	"""
-	Run a test.
-
-	For the TCP schedule-related tests, you may pass a Task Schedule ID as
-	a second argument, for example:
-
-	\b
-	  btu test tcp-create-task-schedule TS-000123
-	  btu test tcp-cancel-task-schedule TS-000123
+	Run a diagnostic test.
 	"""
 	match command:
 		case "frappe-ping":
@@ -181,47 +169,7 @@ def cli_test(command, task_schedule_id):
 
 			asyncio.run(diagnose_sql(quiet=False))
 
-		case "tcp-echo":
-			from btu_scheduler.lib.diagnostics import diagnose_tcp_socket_echo
-
-			diagnose_tcp_socket_echo()
-			click.echo("TCP socket echo test completed.")
-
-		case "tcp-ping":
-			from btu_scheduler.lib.diagnostics import diagnose_tcp_socket_ping
-
-			diagnose_tcp_socket_ping()
-			click.echo("TCP socket ping test completed.")
-
-		case "tcp-create-task-schedule":
-			from btu_scheduler.lib.diagnostics import diagnose_tcp_socket_create_task_schedule
-
-			if not task_schedule_id:
-				click.echo(
-					"Error: You must provide a Task Schedule ID, e.g. 'btu test tcp-create-task-schedule TS-000123'."
-				)
-				return
-			diagnose_tcp_socket_create_task_schedule(task_schedule_id)
-			click.echo("TCP socket create_task_schedule test completed.")
-
-		case "tcp-cancel-task-schedule":
-			from btu_scheduler.lib.diagnostics import diagnose_tcp_socket_cancel_task_schedule
-
-			if not task_schedule_id:
-				click.echo(
-					"Error: You must provide a Task Schedule ID, e.g. 'btu test tcp-cancel-task-schedule TS-000123'."
-				)
-				return
-			diagnose_tcp_socket_cancel_task_schedule(task_schedule_id)
-			click.echo("TCP socket cancel_task_schedule test completed.")
-
 		case "test-rq-hello-world":
 			from btu_scheduler.lib.diagnostics import diagnose_rq_hello_world
 
 			diagnose_rq_hello_world()
-
-		case _:
-			test_choices_string = "\n    ".join(test_choices)
-			raise click.ClickException(
-				f"Unhandled subcommand '{command}'. Please choose one of:\n    {test_choices_string}"
-			)

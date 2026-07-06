@@ -15,5 +15,6 @@ def create_connection(decode_responses=True) -> redis.StrictRedis:
 	return redis.StrictRedis(
 		host=config.rq_host,
 		port=config.rq_port,
+		password=config.rq_password,
 		decode_responses=decode_responses,
 	)

@@ -55,7 +55,6 @@ variables.
 | `BTU_SCHEDULER_SQL_PASSWORD` | Database password |
 | `BTU_SCHEDULER_RQ_HOST` | Redis host |
 | `BTU_SCHEDULER_RQ_PORT` | Redis port |
-| `BTU_SCHEDULER_TCP_SOCKET_PORT` | TCP listener port |
 | `BTU_SCHEDULER_WEBSERVER_IP` | Frappe web server IP |
 | `BTU_SCHEDULER_WEBSERVER_PORT` | Frappe web server port |
 | `BTU_SCHEDULER_WEBSERVER_TOKEN` | Frappe API token |
@@ -68,8 +67,8 @@ Optional variables (with defaults):
 | `BTU_SCHEDULER_LOG_FORMAT` | auto | `text` in development, `json` otherwise |
 | `BTU_SCHEDULER_LOG_LEVEL` | `INFO` | Log level |
 | `BTU_SCHEDULER_TRACING_LEVEL` | (unset) | Legacy alias for `BTU_SCHEDULER_LOG_LEVEL` |
-| `BTU_SCHEDULER_DISABLE_REDIS_RPC` | `false` | Disable Redis RPC listener |
-| `BTU_SCHEDULER_DISABLE_TCP_SOCKET` | `false` | Disable TCP socket listener |
+| `BTU_SCHEDULER_RQ_PASSWORD` | (unset) | Redis AUTH password — required for non-localhost Redis |
+| `BTU_SCHEDULER_DISABLE_REDIS_RPC` | `false` | Disable Redis RPC command listener |
 | `BTU_SCHEDULER_WEBSERVER_HOST_HEADER` | (unset) | Host header for multi-tenant Frappe |
 
 ### Running the CLI

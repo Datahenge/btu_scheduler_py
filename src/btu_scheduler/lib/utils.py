@@ -12,17 +12,6 @@ log = structlog.get_logger(__name__)
 
 
 
-def is_port_in_use(port: int) -> bool:
-	"""
-	Returns a boolean True if a socket with a particular Port is currently being used.
-	"""
-	import socket
-
-	port_as_integer = int(port)
-	with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-		return s.connect_ex(("localhost", port_as_integer)) == 0
-
-
 class Stopwatch:
 	"""
 	My own take on a stopwatch program.
