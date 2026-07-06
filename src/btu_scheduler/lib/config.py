@@ -34,7 +34,6 @@ class SchedulerSettings(XdgSettings):
 	webserver_ip: str
 	webserver_port: int
 	webserver_token: str
-	disable_redis_rpc: bool = False
 	webserver_host_header: str | None = None
 	tracing_level: LogLevel | None = Field(
 		default=None,

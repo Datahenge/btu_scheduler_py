@@ -25,7 +25,6 @@ async def main():
 
 	settings, _bootstrap_log = bootstrap_scheduler(handle_signals=True)
 	log.debug("Initialized configuration in Main Thread.")
-	redis_rpc_enabled = not settings.disable_redis_rpc
 
 	# Make sure Redis is available.
 	try:
@@ -41,11 +40,6 @@ async def main():
 	log.info("BTU Scheduler daemon starting", company="Datahenge LLC")
 	log.info("Scheduler enqueues due BTU Task Schedules in Python RQ.")
 	log.info("Full refresh interval configured.", seconds=settings.full_refresh_internal_secs)
-
-	if redis_rpc_enabled:
-		log.info("Redis RPC command listener is enabled.")
-	else:
-		log.warning("Redis RPC command listener is disabled.")
 
 	# Immediately on startup, Scheduler daemon should populate its internal queue with all BTU Task Schedule identifiers.
 	_ = await queue_full_refill(internal_queue)
@@ -66,8 +60,7 @@ async def main():
 				review_next_execution_times(internal_queue),
 				name="Review Next Execution Times",
 			)
-			if redis_rpc_enabled:
-				group.create_task(redis_command_listener(internal_queue), name="Redis RPC Command Listener")
+			group.create_task(redis_command_listener(internal_queue), name="Redis RPC Command Listener")
 
 		# Wait until all tasks are concluded (forever)
 		log.info(f"All tasks have completed now: {task1.result()}, {task2.result()}, {task3.result()}")

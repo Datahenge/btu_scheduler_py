@@ -68,7 +68,6 @@ Optional variables (with defaults):
 | `BTU_SCHEDULER_LOG_LEVEL` | `INFO` | Log level |
 | `BTU_SCHEDULER_TRACING_LEVEL` | (unset) | Legacy alias for `BTU_SCHEDULER_LOG_LEVEL` |
 | `BTU_SCHEDULER_RQ_PASSWORD` | (unset) | Redis AUTH password — required for non-localhost Redis |
-| `BTU_SCHEDULER_DISABLE_REDIS_RPC` | `false` | Disable Redis RPC command listener |
 | `BTU_SCHEDULER_WEBSERVER_HOST_HEADER` | (unset) | Host header for multi-tenant Frappe |
 
 ### Running the CLI
