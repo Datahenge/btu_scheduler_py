@@ -1,5 +1,5 @@
 """
-Unit tests for TSIK, RQScheduledTask, and _dst_fired_cache_key in scheduler.py.
+Unit tests for RQScheduledTask and _dst_fired_cache_key in scheduler.py.
 
 No running services required — all tests operate on pure data structures.
 """
@@ -8,7 +8,7 @@ import unittest
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from btu_scheduler.lib.scheduler import TSIK, RQScheduledTask, _dst_fired_cache_key
+from btu_scheduler.lib.scheduler import RQScheduledTask, _dst_fired_cache_key
 
 UTC = ZoneInfo("UTC")
 EASTERN = ZoneInfo("America/New_York")
@@ -18,67 +18,49 @@ SAMPLE_TS = 1742489940
 SAMPLE_KEY = f"{SAMPLE_ID}|{SAMPLE_TS}"
 
 
-class TestTSIK(unittest.TestCase):
-
-	def test_task_schedule_id_extraction(self):
-		self.assertEqual(TSIK(SAMPLE_KEY).task_schedule_id(), SAMPLE_ID)
-
-	def test_unix_timestamp_extraction(self):
-		self.assertEqual(TSIK(SAMPLE_KEY).next_execution_as_unix_timestamp(), SAMPLE_TS)
-
-	def test_datetime_utc_is_utc_aware(self):
-		dt = TSIK(SAMPLE_KEY).next_execution_as_datetime_utc()
-		self.assertIsNotNone(dt.tzinfo)
-		self.assertEqual(dt.utcoffset().total_seconds(), 0)
-
-	def test_datetime_utc_matches_timestamp(self):
-		dt = TSIK(SAMPLE_KEY).next_execution_as_datetime_utc()
-		self.assertEqual(int(dt.timestamp()), SAMPLE_TS)
-
-	def test_from_tuple_truncates_fractional_seconds(self):
-		tsik = TSIK.from_tuple(SAMPLE_ID, 1742489940.9)
-		self.assertEqual(tsik.next_execution_as_unix_timestamp(), SAMPLE_TS)
-
-	def test_from_tuple_produces_correct_key(self):
-		tsik = TSIK.from_tuple(SAMPLE_ID, SAMPLE_TS)
-		self.assertEqual(tsik.key, SAMPLE_KEY)
-
-	def test_str_includes_task_schedule_id(self):
-		self.assertIn(SAMPLE_ID, str(TSIK(SAMPLE_KEY)))
-
-
 class TestRQScheduledTask(unittest.TestCase):
-
 	def _make(self, task_id=SAMPLE_ID, unix_ts=SAMPLE_TS):
 		return RQScheduledTask.from_tuple(task_id, unix_ts)
 
-	def test_to_tsik_format(self):
-		self.assertEqual(self._make().to_tsik(), SAMPLE_KEY)
+	# --- from_key ---
 
-	def test_from_tsik_preserves_task_schedule_id(self):
-		task = RQScheduledTask.from_tsik(TSIK(SAMPLE_KEY))
+	def test_from_key_preserves_task_schedule_id(self):
+		task = RQScheduledTask.from_key(SAMPLE_KEY)
 		self.assertEqual(task.task_schedule_id, SAMPLE_ID)
 
-	def test_from_tsik_preserves_unix_timestamp(self):
-		task = RQScheduledTask.from_tsik(TSIK(SAMPLE_KEY))
+	def test_from_key_preserves_unix_timestamp(self):
+		task = RQScheduledTask.from_key(SAMPLE_KEY)
 		self.assertEqual(task.next_execution_as_unix_timestamp, SAMPLE_TS)
 
-	def test_from_tsik_datetime_is_utc_aware(self):
-		task = RQScheduledTask.from_tsik(TSIK(SAMPLE_KEY))
+	def test_from_key_datetime_is_utc_aware(self):
+		task = RQScheduledTask.from_key(SAMPLE_KEY)
 		self.assertEqual(task.next_execution_as_datetime_utc.utcoffset().total_seconds(), 0)
 
-	def test_from_tsik_raises_type_error_on_wrong_type(self):
-		with self.assertRaises(TypeError):
-			RQScheduledTask.from_tsik("not-a-tsik")
+	def test_from_key_datetime_matches_timestamp(self):
+		task = RQScheduledTask.from_key(SAMPLE_KEY)
+		self.assertEqual(int(task.next_execution_as_datetime_utc.timestamp()), SAMPLE_TS)
 
-	def test_from_tuple_matches_from_tsik(self):
-		via_tsik = RQScheduledTask.from_tsik(TSIK(SAMPLE_KEY))
+	# --- from_tuple ---
+
+	def test_from_tuple_truncates_fractional_seconds(self):
+		task = RQScheduledTask.from_tuple(SAMPLE_ID, 1742489940.9)
+		self.assertEqual(task.next_execution_as_unix_timestamp, SAMPLE_TS)
+
+	def test_from_key_matches_from_tuple(self):
+		via_key = RQScheduledTask.from_key(SAMPLE_KEY)
 		via_tuple = RQScheduledTask.from_tuple(SAMPLE_ID, SAMPLE_TS)
-		self.assertEqual(via_tsik, via_tuple)
+		self.assertEqual(via_key, via_tuple)
 
-	def test_to_tsik_roundtrip(self):
+	# --- to_key ---
+
+	def test_to_key_format(self):
+		self.assertEqual(self._make().to_key(), SAMPLE_KEY)
+
+	def test_to_key_roundtrip(self):
 		task = self._make()
-		self.assertEqual(task.to_tsik(), SAMPLE_KEY)
+		self.assertEqual(RQScheduledTask.from_key(task.to_key()), task)
+
+	# --- sort helpers ---
 
 	def test_sort_by_id_ascending(self):
 		tasks = [self._make("TS-000003"), self._make("TS-000001"), self._make("TS-000002")]

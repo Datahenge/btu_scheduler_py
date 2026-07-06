@@ -23,68 +23,34 @@ def _dst_fired_cache_key(task_schedule_id: str, utc_datetime: DateTimeType, cron
 
 
 @dataclass
-class TSIK:
-	"""
-	Task Scheduled Instance Key
-	Example:   TS-000003|1742489940
-	"""
-
-	key: str
-
-	def task_schedule_id(self) -> str:
-		return self.key.split("|")[0]
-
-	def next_execution_as_unix_timestamp(self) -> int:
-		"""
-		Note: The timestamp is calculated from UTC.
-		"""
-		return int(self.key.split("|")[1])  # not allowing milliseconds; return an Integer.
-
-	def next_execution_as_datetime_utc(self) -> DateTimeType:
-		"""
-		Task Schedule's next execution time, in UTC.
-		"""
-		# VERY IMPORTANT to specify the tz or it assumes local!
-		result = DateTimeType.fromtimestamp(self.next_execution_as_unix_timestamp(), tz=ZoneInfo("UTC"))
-		return result
-
-	def __str__(self) -> str:
-		return f"{self.task_schedule_id()} at {self.next_execution_as_datetime_utc()}"
-
-	@staticmethod
-	def from_tuple(task_schedule_id, next_execution_timestamp):
-		return TSIK(
-			f"{task_schedule_id}|{str(int(next_execution_timestamp))}"  # recase as Integer to throw out fractions of seconds.
-		)
-
-
-@dataclass
 class RQScheduledTask:
 	task_schedule_id: str
 	next_execution_as_unix_timestamp: int  # not supporting fractions of seconds.
 	next_execution_as_datetime_utc: DateTimeType
 
-	def to_tsik(self) -> str:
-		"""
-		Example: TS-000003|1742677041
-		"""
+	def to_key(self) -> str:
+		"""Task Scheduled Instance Key (TSIK).  Example: TS-000003|1742677041"""
 		return f"{self.task_schedule_id}|{self.next_execution_as_unix_timestamp}"
 
 	@staticmethod
-	def from_tsik(tsik: TSIK) -> "RQScheduledTask":
-		if not isinstance(tsik, TSIK):
-			raise TypeError(tsik)
-
+	def from_key(key: str) -> "RQScheduledTask":
+		"""Parse a Task Scheduled Instance Key string: '{task_schedule_id}|{unix_timestamp}'."""
+		parts = key.split("|")
+		ts = int(parts[1])
 		return RQScheduledTask(
-			task_schedule_id=tsik.task_schedule_id(),
-			next_execution_as_unix_timestamp=tsik.next_execution_as_unix_timestamp(),
-			next_execution_as_datetime_utc=tsik.next_execution_as_datetime_utc(),
+			task_schedule_id=parts[0],
+			next_execution_as_unix_timestamp=ts,
+			next_execution_as_datetime_utc=DateTimeType.fromtimestamp(ts, tz=ZoneInfo("UTC")),
 		)
 
 	@staticmethod
-	def from_tuple(task_schedule_id: str, unix_timestamp: int):
-		new_tsik = TSIK.from_tuple(task_schedule_id, int(unix_timestamp))
-		return RQScheduledTask.from_tsik(new_tsik)
+	def from_tuple(task_schedule_id: str, unix_timestamp: int) -> "RQScheduledTask":
+		ts = int(unix_timestamp)
+		return RQScheduledTask(
+			task_schedule_id=task_schedule_id,
+			next_execution_as_unix_timestamp=ts,
+			next_execution_as_datetime_utc=DateTimeType.fromtimestamp(ts, tz=ZoneInfo("UTC")),
+		)
 
 	@staticmethod
 	def sort_list_by_id(list_of_rq_scheduled_task) -> list:
@@ -155,7 +121,7 @@ def add_task_schedule_to_rq(task_schedule: BtuTaskSchedule):
 
 	members_added = redis_conn.zadd(
 		RQ_KEY_SCHEDULED_TASKS,
-		{rq_scheduled_task.to_tsik(): rq_scheduled_task.next_execution_as_unix_timestamp},
+		{rq_scheduled_task.to_key(): rq_scheduled_task.next_execution_as_unix_timestamp},
 	)
 
 	if members_added > 0:
@@ -205,7 +171,7 @@ def fetch_task_schedules_ready_for_rq(sched_before_unix_time: int) -> list:
 
 	# The strings in the list are a concatenation: Task Schedule ID, pipe character, Unix Time.
 	# Need to split off the trailing Unix Time, to obtain a list of Task Schedules.
-	task_schedules_to_enqueue = [RQScheduledTask.from_tsik(TSIK(each)) for each in zranges]
+	task_schedules_to_enqueue = [RQScheduledTask.from_key(each) for each in zranges]
 
 	# Finally, return a list of Task Schedule identifiers:
 	return task_schedules_to_enqueue
@@ -268,7 +234,7 @@ async def run_immediate_scheduled_task(task_schedule_instance: RQScheduledTask, 
 			f"DST duplicate suppressed: Task Schedule {task_schedule.id} already fired for "
 			f"local slot {local_slot:%Y-%m-%d %H:%M} ({task_schedule.cron_timezone}). Skipping re-fire."
 		)
-		redis_conn.zrem(RQ_KEY_SCHEDULED_TASKS, str(task_schedule_instance.to_tsik()))
+		redis_conn.zrem(RQ_KEY_SCHEDULED_TASKS, task_schedule_instance.to_key())
 		await internal_queue.put(task_schedule_instance.task_schedule_id)
 		return
 
@@ -282,7 +248,7 @@ async def run_immediate_scheduled_task(task_schedule_instance: RQScheduledTask, 
 	redis_conn.setex(dst_cache_key, DST_FIRED_CACHE_TTL_SECS, "1")
 
 	# IMPORTANT: Remove this Task from the BTU Schedule Key (so it doesn't accidentally get executed twice)
-	redis_result = redis_conn.zrem(RQ_KEY_SCHEDULED_TASKS, str(task_schedule_instance.to_tsik()))
+	redis_result = redis_conn.zrem(RQ_KEY_SCHEDULED_TASKS, task_schedule_instance.to_key())
 	if redis_result != 1:
 		log.error(f"Unable to remove Task Schedule Instance using 'zrem'.  Response from Redis = {redis_result}")
 		return
@@ -307,9 +273,7 @@ def rq_get_scheduled_tasks() -> list[RQScheduledTask]:
 	)  # (0, [('TS-000007|1742607180', 1742607180.0), ('TS-000007|1742607360', 1742607360.0) ])
 	list_of_tsik_string = [each[0] for each in redis_result[1]]
 
-	wrapped_result = [
-		RQScheduledTask.from_tsik(TSIK(each)) for each in list_of_tsik_string
-	]  # list of RQSchedule Task;  Map It?
+	wrapped_result = [RQScheduledTask.from_key(each) for each in list_of_tsik_string]
 	return wrapped_result
 
 
