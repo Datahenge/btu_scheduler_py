@@ -62,7 +62,6 @@ async def get_task_schedule_by_id(task_schedule_id: str) -> dict:
 			,TaskSchedule.task_description
 			,TaskSchedule.enabled
 			,TaskSchedule.queue_name
-			,TaskSchedule.redis_job_id
 			,TaskSchedule.argument_overrides
 			,TaskSchedule.schedule_description
 			,TaskSchedule.cron_string
@@ -113,7 +112,6 @@ async def get_task_by_id(task_id: str) -> dict:
 	database = await get_database()
 	sql_row = await database.fetch_one(query_string, values={"task_id": task_id})
 	return sql_row
-
 
 
 async def get_enabled_task_schedules() -> list:

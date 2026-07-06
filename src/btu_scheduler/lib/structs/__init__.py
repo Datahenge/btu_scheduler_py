@@ -51,7 +51,6 @@ class BtuTaskSchedule:
 	schedule_description: str
 	cron_string: str
 	cron_timezone: ZoneInfo
-	redis_job_id: str | None = None  # Not all schedules will have a Redis Job yet
 
 	@staticmethod
 	async def init_from_schedule_key(schedule_key: str) -> "BtuTaskSchedule":

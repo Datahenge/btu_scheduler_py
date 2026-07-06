@@ -45,7 +45,6 @@ def _schedule(**overrides) -> BtuTaskSchedule:
 
 
 class TestBtuTaskConstruction(unittest.TestCase):
-
 	def test_fields_are_stored(self):
 		task = _task()
 		self.assertEqual(task.task_key, "TASK-001")
@@ -61,20 +60,12 @@ class TestBtuTaskConstruction(unittest.TestCase):
 
 
 class TestBtuTaskScheduleConstruction(unittest.TestCase):
-
 	def test_fields_are_stored(self):
 		s = _schedule()
 		self.assertEqual(s.id, "TS-000001")
 		self.assertEqual(s.task_key, "TASK-001")
 		self.assertTrue(s.enabled)
 		self.assertEqual(s.queue_name, "default")
-
-	def test_redis_job_id_defaults_to_none(self):
-		self.assertIsNone(_schedule().redis_job_id)
-
-	def test_redis_job_id_accepts_value(self):
-		s = _schedule(redis_job_id="rq-abc-123")
-		self.assertEqual(s.redis_job_id, "rq-abc-123")
 
 	def test_disabled_schedule_is_valid(self):
 		self.assertFalse(_schedule(enabled=False).enabled)
