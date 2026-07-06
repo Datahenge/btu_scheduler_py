@@ -36,7 +36,7 @@ def diagnose_frappe_ping(debug_mode=False):
 	import requests
 
 	from btu_scheduler.lib.config import load_config
-	from btu_scheduler.lib.utils import get_frappe_base_url
+	from btu_scheduler.lib.utils import build_frappe_headers, get_frappe_base_url
 
 	config_data = load_config()
 
@@ -44,13 +44,7 @@ def diagnose_frappe_ping(debug_mode=False):
 	if debug_mode:
 		print(f"URL for ping = {url}")
 
-	headers = {
-		"Authorization": config_data.webserver_token,
-		"Content-Type": "application/json",
-	}
-	# If Frappe is running via gunicorn, in DNS Multi-tenancy mode, then we have to pass a "Host" header.
-	if config_data.webserver_host_header:
-		headers["Host"] = config_data.webserver_host_header
+	headers = build_frappe_headers(config_data)
 
 	response = requests.get(url=url, headers=headers, timeout=30)
 	print(f"Response Status Code: {response.status_code}")
@@ -67,17 +61,11 @@ def diagnose_pickler(debug_mode: bool = True):
 	import requests
 
 	from btu_scheduler.lib.config import load_config
-	from btu_scheduler.lib.utils import get_frappe_base_url
+	from btu_scheduler.lib.utils import build_frappe_headers, get_frappe_base_url
 
 	config_data = load_config()
 	url = f"{get_frappe_base_url()}/api/method/btu.btu_api.endpoints.test_function_ping_now_bytes"
-	headers = {
-		"Authorization": config_data.webserver_token,
-		"Content-Type": "application/json",
-	}
-	# If Frappe is running via gunicorn, in DNS Multi-tenancy mode, then we have to pass a "Host" header.
-	if config_data.webserver_host_header:
-		headers["Host"] = config_data.webserver_host_header
+	headers = build_frappe_headers(config_data)
 
 	response = requests.get(
 		url=url,

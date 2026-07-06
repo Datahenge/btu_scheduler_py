@@ -4,9 +4,13 @@
 
 import time
 from datetime import datetime as DateTimeType
+from typing import TYPE_CHECKING
 
 # Third Party
 import structlog
+
+if TYPE_CHECKING:
+    from btu_scheduler.lib.config import SchedulerSettings
 
 log = structlog.get_logger(__name__)
 
@@ -63,6 +67,17 @@ def get_datetime_string():
 	"""
 	return DateTimeType.now().strftime("%Y-%m-%d %H:%M:%S")
 
+
+
+def build_frappe_headers(config: "SchedulerSettings", content_type: str = "application/json") -> dict[str, str]:
+	"""Build the HTTP headers required for every Frappe REST API call."""
+	headers: dict[str, str] = {
+		"Authorization": config.webserver_token,
+		"Content-Type": content_type,
+	}
+	if config.webserver_host_header:
+		headers["Host"] = config.webserver_host_header
+	return headers
 
 
 def get_frappe_base_url() -> str:

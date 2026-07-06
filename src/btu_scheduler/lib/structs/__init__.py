@@ -10,7 +10,7 @@ import structlog
 from btu_scheduler.lib import btu_cron
 from btu_scheduler.lib.config import load_config
 from btu_scheduler.lib.sql import get_task_by_id, get_task_schedule_by_id
-from btu_scheduler.lib.utils import get_frappe_base_url
+from btu_scheduler.lib.utils import build_frappe_headers, get_frappe_base_url
 
 log = structlog.get_logger(__name__)
 
@@ -83,13 +83,7 @@ class BtuTaskSchedule:
 
 		config_data = load_config()
 		url = f"{get_frappe_base_url()}/api/method/btu.btu_api.endpoints.enqueue_for_next_available_worker"
-		headers = {
-			"Authorization": config_data.webserver_token,
-			"Content-Type": "application/json",
-		}
-		# If Frappe is running via gunicorn, in DNS Multi-tenancy mode, then we have to pass a "Host" header.
-		if config_data.webserver_host_header:
-			headers["Host"] = config_data.webserver_host_header
+		headers = build_frappe_headers(config_data)
 
 		response = requests.post(url=url, headers=headers, params={"task_schedule_key": self.id}, timeout=30)
 
