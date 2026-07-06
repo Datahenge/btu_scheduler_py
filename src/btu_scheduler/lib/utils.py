@@ -3,7 +3,6 @@
 # NOTE: Functions here should not depend on other btu_scheduler modules or namespaces.
 
 import time
-from datetime import datetime as DateTimeType
 from typing import TYPE_CHECKING
 
 # Third Party
@@ -59,14 +58,6 @@ class Stopwatch:
 		# This is now the 'last_checkpoint'
 		self.last_checkpoint = now
 		return seconds_elapsed_start
-
-
-def get_datetime_string():
-	"""
-	Return the current datetime in a easily readable format.
-	"""
-	return DateTimeType.now().strftime("%Y-%m-%d %H:%M:%S")
-
 
 
 def build_frappe_headers(config: "SchedulerSettings", content_type: str = "application/json") -> dict[str, str]:

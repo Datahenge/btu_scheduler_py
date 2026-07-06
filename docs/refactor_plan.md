@@ -104,25 +104,23 @@ Four call sites duplicate the same `Authorization` + `Content-Type` + optional `
 
 Extract to `lib/utils.py` (or a new `lib/http_utils.py`) and call from all four sites.
 
-### 5b. Unify TCP and Redis command dispatch
+### 5b. ~~Unify TCP and Redis command dispatch~~ *(moot — TCP deleted)*
 
-`handle_tcp_request()` (`coroutines.py`, ~230 lines) and `_dispatch_redis_command()` implement the same logical commands. Extract a pure `_execute_command(command_name, payload, config) -> dict` function. Both paths call it after their respective transport parsing.
+The TCP socket listener was removed entirely; Redis RPC is the sole inbound channel. `_dispatch_redis_command()` is the only dispatch path and needs no unification.
 
-### 5c. Evaluate TSIK elimination
+### 5c. TSIK elimination *(complete)*
 
-`TSIK` is a thin string-wrapper newtype that exists because Rust requires distinct types; Python does not. Consider whether `RQScheduledTask` can parse the composite `"{id}|{timestamp}"` string directly, eliminating the `TSIK → RQScheduledTask` conversion chain. Do this last, after tests exist.
+`TSIK` dataclass removed. `RQScheduledTask.from_key(str)` parses the composite key directly; `to_key()` replaces `to_tsik()`. The two-step `TSIK(string) → from_tsik()` chain is gone.
 
 ---
 
-## Phase 6 — Test Coverage
+## Phase 6 — Test Coverage *(complete)*
 
-Current state: one test file covering only `tz_cron_to_utc_datetimes()`.
-
-Priority additions (no running services required):
-1. `scheduler.py` — `TSIK` parsing/formatting, `RQScheduledTask` helpers
-2. `btu_rq.py` — `RQJobWrapper` field extraction from mock Redis hash data
-3. `structs/__init__.py` — `BtuTaskSchedule` and `BtuTask` dataclass construction
-4. `cli/__init__.py` — Click command smoke tests using `click.testing.CliRunner`
+Added 62 new tests across 4 new test files (no running services required):
+1. `test_scheduler.py` — `RQScheduledTask` (`from_key`, `to_key`, `from_tuple`, sort helpers), `_dst_fired_cache_key`
+2. `test_structs.py` — `BtuTask` and `BtuTaskSchedule` dataclass construction, `get_next_runtimes()` delegation
+3. `test_utils.py` — `build_frappe_headers()` (9 cases including empty/None host header)
+4. `test_cli.py` — Click command smoke tests with `CliRunner` (about, help, version, config path, test subcommand)
 
 ---
 
@@ -130,14 +128,14 @@ Priority additions (no running services required):
 
 | File | Phases |
 |---|---|
-| `src/btu_scheduler/lib/btu_rq.py` | 1 ✓, 2, 3 |
-| `src/btu_scheduler/lib/utils.py` | 1 ✓, 4, 5a |
-| `src/btu_scheduler/lib/structs/__init__.py` | 1 ✓, 3, 5a |
-| `src/btu_scheduler/lib/scheduler.py` | 1 ✓, 2, 4, 5b, 5c |
-| `src/btu_scheduler/daemon/coroutines.py` | 2, 3, 4, 5b |
-| `src/btu_scheduler/lib/diagnostics.py` | 1 ✓, 4, 5a |
-| `src/btu_scheduler/lib/structs/sanchez.py` | 3, 5a |
-| `src/btu_scheduler/cli/__init__.py` | 1 ✓, 2 |
+| `src/btu_scheduler/lib/btu_rq.py` | 1 ✓, 2 ✓, 3 ✓ |
+| `src/btu_scheduler/lib/utils.py` | 1 ✓, 4 ✓, 5a ✓ |
+| `src/btu_scheduler/lib/structs/__init__.py` | 1 ✓, 3 ✓, 5a ✓ |
+| `src/btu_scheduler/lib/scheduler.py` | 1 ✓, 2 ✓, 4 ✓, 5b N/A, 5c ✓ |
+| `src/btu_scheduler/daemon/coroutines.py` | 2 ✓, 3 ✓, 4 ✓, 5b N/A |
+| `src/btu_scheduler/lib/diagnostics.py` | 1 ✓, 4 ✓, 5a ✓ |
+| `src/btu_scheduler/lib/structs/sanchez.py` | deleted (orphan) |
+| `src/btu_scheduler/cli/__init__.py` | 1 ✓, 2 ✓ |
 
 ---
 

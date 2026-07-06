@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime as DateTimeType
 from zoneinfo import ZoneInfo
 
+import redis
 import structlog
 
 from btu_scheduler.lib.btu_rq import create_connection
@@ -111,18 +112,20 @@ def add_task_schedule_to_rq(task_schedule: BtuTaskSchedule):
 	)
 
 	redis_conn = create_connection()
-	if not redis_conn:
-		return
 
 	# NOTE:  Earlier versions of zadd accepted 3 values: "redis_key_name", data, score.
 	#        Now you must pass 2: "redis_key_name" plus a dictionary:  {data1: score1, data2: score2}
 
 	# NOTE:  The response from zadd is the number of records added.  Value 0 means the record already existed, and no write was necessary.
 
-	members_added = redis_conn.zadd(
-		RQ_KEY_SCHEDULED_TASKS,
-		{rq_scheduled_task.to_key(): rq_scheduled_task.next_execution_as_unix_timestamp},
-	)
+	try:
+		members_added = redis_conn.zadd(
+			RQ_KEY_SCHEDULED_TASKS,
+			{rq_scheduled_task.to_key(): rq_scheduled_task.next_execution_as_unix_timestamp},
+		)
+	except redis.exceptions.ConnectionError:
+		log.error(f"add_task_schedule_to_rq(): Cannot connect to Redis for Task Schedule {task_schedule.id}.")
+		return
 
 	if members_added > 0:
 		messages = []
@@ -158,11 +161,11 @@ def fetch_task_schedules_ready_for_rq(sched_before_unix_time: int) -> list:
 		"fetch_task_schedules_ready_for_rq() : reviewing 'Next Execution Times' for each Task Schedule in Redis..."
 	)
 	redis_conn = create_connection()
-	if not redis_conn:
-		log.error("fetch_task_schedules_ready_for_rq(): Cannot establish connection to Redis; returning an empty list.")
+	try:
+		zranges: list = redis_conn.zrange(RQ_KEY_SCHEDULED_TASKS, 0, sched_before_unix_time, byscore=True)
+	except redis.exceptions.ConnectionError:
+		log.error("fetch_task_schedules_ready_for_rq(): Cannot connect to Redis; returning empty list.")
 		return []
-
-	zranges: list = redis_conn.zrange(RQ_KEY_SCHEDULED_TASKS, 0, sched_before_unix_time, byscore=True)
 	if not zranges:
 		return []
 
@@ -198,9 +201,6 @@ async def run_immediate_scheduled_task(task_schedule_instance: RQScheduledTask, 
 		f">>>>> Time To Make The Donuts! (enqueuing Redis Job '{task_schedule_instance.task_schedule_id}' for immediate execution)"
 	)
 	redis_conn = create_connection()
-	if not redis_conn:
-		log.error("Early exit from run_immediate_scheduled_task(); cannot establish a connection to Redis database.")
-		return  # If cannot connect to Redis, do not panic the thread.  Instead, return an empty list.
 
 	# 1. Read the SQL database to construct a BTU Task Schedule struct.
 	try:
@@ -220,43 +220,47 @@ async def run_immediate_scheduled_task(task_schedule_instance: RQScheduledTask, 
 		)
 		return
 
-	# 3. DST fall-back guard: skip if this local time slot already fired today.
-	#    The scheduler is stateless by design, so after a fall-back the re-queue
-	#    calculation has no memory of what already executed.  This cache closes that gap.
-	dst_cache_key = _dst_fired_cache_key(
-		task_schedule.id,
-		task_schedule_instance.next_execution_as_datetime_utc,
-		task_schedule.cron_timezone,
-	)
-	if redis_conn.exists(dst_cache_key):
-		local_slot = task_schedule_instance.next_execution_as_datetime_utc.astimezone(task_schedule.cron_timezone)
-		log.warning(
-			f"DST duplicate suppressed: Task Schedule {task_schedule.id} already fired for "
-			f"local slot {local_slot:%Y-%m-%d %H:%M} ({task_schedule.cron_timezone}). Skipping re-fire."
-		)
-		redis_conn.zrem(RQ_KEY_SCHEDULED_TASKS, task_schedule_instance.to_key())
-		await internal_queue.put(task_schedule_instance.task_schedule_id)
-		return
-
+	# 3. DST fall-back guard + post-enqueue Redis cleanup — both wrapped for connection resilience.
 	try:
-		task_schedule.enqueue_for_next_available_worker()
-	except Exception as ex:
-		log.error(f"Error while attempting to queue job for execution: {ex}")
-		return
+		dst_cache_key = _dst_fired_cache_key(
+			task_schedule.id,
+			task_schedule_instance.next_execution_as_datetime_utc,
+			task_schedule.cron_timezone,
+		)
+		if redis_conn.exists(dst_cache_key):
+			local_slot = task_schedule_instance.next_execution_as_datetime_utc.astimezone(task_schedule.cron_timezone)
+			log.warning(
+				f"DST duplicate suppressed: Task Schedule {task_schedule.id} already fired for "
+				f"local slot {local_slot:%Y-%m-%d %H:%M} ({task_schedule.cron_timezone}). Skipping re-fire."
+			)
+			redis_conn.zrem(RQ_KEY_SCHEDULED_TASKS, task_schedule_instance.to_key())
+			await internal_queue.put(task_schedule_instance.task_schedule_id)
+			return
 
-	# Record this local slot as fired so DST fall-back cannot re-fire it.
-	redis_conn.setex(dst_cache_key, DST_FIRED_CACHE_TTL_SECS, "1")
+		try:
+			task_schedule.enqueue_for_next_available_worker()
+		except Exception as ex:
+			log.error(f"Error while attempting to queue job for execution: {ex}")
+			return
 
-	# IMPORTANT: Remove this Task from the BTU Schedule Key (so it doesn't accidentally get executed twice)
-	redis_result = redis_conn.zrem(RQ_KEY_SCHEDULED_TASKS, task_schedule_instance.to_key())
-	if redis_result != 1:
-		log.error(f"Unable to remove Task Schedule Instance using 'zrem'.  Response from Redis = {redis_result}")
-		return
+		# Record this local slot as fired so DST fall-back cannot re-fire it.
+		redis_conn.setex(dst_cache_key, DST_FIRED_CACHE_TTL_SECS, "1")
 
-	# Finally, recalculate the next Run Time.
-	# Easy enough; just push the Task Schedule ID back into the -Internal- Queue!
-	# It will get processed automatically during the next thread cycle.
-	await internal_queue.put(task_schedule_instance.task_schedule_id)
+		# IMPORTANT: Remove this Task from the BTU Schedule Key (so it doesn't accidentally get executed twice)
+		redis_result = redis_conn.zrem(RQ_KEY_SCHEDULED_TASKS, task_schedule_instance.to_key())
+		if redis_result != 1:
+			log.error(f"Unable to remove Task Schedule Instance using 'zrem'.  Response from Redis = {redis_result}")
+			return
+
+		# Finally, recalculate the next Run Time.
+		# Easy enough; just push the Task Schedule ID back into the -Internal- Queue!
+		# It will get processed automatically during the next thread cycle.
+		await internal_queue.put(task_schedule_instance.task_schedule_id)
+
+	except redis.exceptions.ConnectionError:
+		log.error(
+			f"run_immediate_scheduled_task(): Lost Redis connection for Task Schedule {task_schedule_instance.task_schedule_id}."
+		)
 
 
 def rq_get_scheduled_tasks() -> list[RQScheduledTask]:
@@ -264,10 +268,6 @@ def rq_get_scheduled_tasks() -> list[RQScheduledTask]:
 	Query Redis for the values held in key RQ_KEY_SCHEDULED_TASKS
 	"""
 	redis_conn = create_connection()
-	if not redis_conn:
-		log.warning("In lieu of a Redis Connection, returning an empty vector.")
-		return []
-
 	redis_result: tuple = redis_conn.zscan(
 		RQ_KEY_SCHEDULED_TASKS
 	)  # (0, [('TS-000007|1742607180', 1742607180.0), ('TS-000007|1742607360', 1742607360.0) ])
@@ -284,15 +284,19 @@ def rq_cancel_scheduled_task(task_schedule_id: str) -> None:
 	# As of changes made May 21st 2022, the members in the Ordered Set 'btu_scheduler:task_execution_times'
 	# are not just Task Schedule ID's.  The Unix Time is a suffix.  Removing members now requires some "starts_with" logic.
 
-	with create_connection() as redis_conn:
-		# First, list all the keys using 'zrange btu_scheduler:task_execution_times 0 -1'
-		all_task_schedules = redis_conn.zrange(RQ_KEY_SCHEDULED_TASKS, 0, -1)
-		removed: bool = False
+	try:
+		with create_connection() as redis_conn:
+			# First, list all the keys using 'zrange btu_scheduler:task_execution_times 0 -1'
+			all_task_schedules = redis_conn.zrange(RQ_KEY_SCHEDULED_TASKS, 0, -1)
+			removed: bool = False
 
-		for each_row in all_task_schedules:
-			if each_row.startswith(task_schedule_id):
-				_ = redis_conn.zrem(RQ_KEY_SCHEDULED_TASKS, each_row)
-				removed = True
+			for each_row in all_task_schedules:
+				if each_row.startswith(task_schedule_id):
+					_ = redis_conn.zrem(RQ_KEY_SCHEDULED_TASKS, each_row)
+					removed = True
+	except redis.exceptions.ConnectionError:
+		log.error(f"rq_cancel_scheduled_task(): Cannot connect to Redis for Task Schedule {task_schedule_id}.")
+		return
 
 	if removed:
 		log.info("Scheduled Task successfully removed from Redis Queue.")
@@ -312,9 +316,6 @@ def clear_all_scheduled_tasks() -> bool:
 	Clear all scheduled tasks from the Redis database.
 	"""
 	redis_conn = create_connection()
-	if not redis_conn:
-		log.error("clear_all_scheduled_tasks(): Cannot establish connection to Redis database.")
-		return False
 	redis_conn.zremrangebyrank(RQ_KEY_SCHEDULED_TASKS, 0, -1)
 	return True
 

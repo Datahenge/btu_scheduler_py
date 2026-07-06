@@ -113,12 +113,6 @@ A `null` response (BLPOP timeout) means the scheduler did not respond within 5 s
 
 ---
 
-## Disabling the Redis RPC listener
+## Relationship to Unix Domain Sockets
 
-Set `BTU_SCHEDULER_DISABLE_REDIS_RPC=true` in your environment (or `~/.config/btu-scheduler/.env`) to prevent the scheduler from starting the listener. This should only be needed for debugging.
-
----
-
-## Relationship to TCP and Unix Domain Sockets
-
-The Redis RPC listener is the **primary** control channel as of 2025. The TCP and UDS listeners remain available for backward compatibility and local debugging but are no longer required for normal operation. The Frappe `SchedulerAPI` class now uses Redis RPC exclusively.
+The original BTU Scheduler used a Unix Domain Socket (UDS) for inbound commands from Frappe. UDS was replaced by Redis RPC, which requires no shared filesystem and works identically in containerised deployments. Redis RPC is now the **sole** inbound command channel; there is no TCP or UDS fallback.

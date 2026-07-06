@@ -38,24 +38,6 @@ class CronStruct:
 			value_or_wildcard(self.day_of_week),
 		)
 
-	def to_string7(self) -> str:
-		"""
-		Convert a CronStruct instance to a String.
-		"""
-
-		def value_or_wildcard(value):
-			return value if value else "*"
-
-		return "{} {} {} {} {} {} {}".format(
-			value_or_wildcard(self.second),
-			value_or_wildcard(self.minute),
-			value_or_wildcard(self.hour),
-			value_or_wildcard(self.day_of_month),
-			value_or_wildcard(self.month),
-			value_or_wildcard(self.day_of_week),
-			value_or_wildcard(self.year),
-		)
-
 	@staticmethod
 	def from_string(cron_string: str) -> "CronStruct":
 		def nonwildcard_or_none(element: str) -> str | None:

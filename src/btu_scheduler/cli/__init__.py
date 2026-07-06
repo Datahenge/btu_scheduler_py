@@ -96,12 +96,17 @@ def cli_clear_scheduled_tasks():
 	"""
 	Clear all scheduled tasks from the Redis database.
 	"""
+	import redis
+
 	from btu_scheduler.lib.scheduler import clear_all_scheduled_tasks
 
-	if clear_all_scheduled_tasks():
-		click.echo("All scheduled tasks cleared from Redis database.")
-	else:
-		click.echo("Error: Unable to clear scheduled tasks from Redis database.")
+	try:
+		clear_all_scheduled_tasks()
+	except redis.exceptions.ConnectionError as ex:
+		raise click.ClickException(f"Cannot connect to Redis: {ex}") from ex
+	except redis.exceptions.AuthenticationError as ex:
+		raise click.ClickException(f"Redis authentication failed: {ex}") from ex
+	click.echo("All scheduled tasks cleared from Redis database.")
 
 
 @entry_point.command("list-scheduled-tasks")
@@ -109,9 +114,16 @@ def cli_list_scheduled_tasks():
 	"""
 	List Schedule IDs already in the scheduler queue.
 	"""
+	import redis
+
 	from btu_scheduler.lib.scheduler import rq_print_scheduled_tasks
 
-	rq_print_scheduled_tasks()
+	try:
+		rq_print_scheduled_tasks()
+	except redis.exceptions.ConnectionError as ex:
+		raise click.ClickException(f"Cannot connect to Redis: {ex}") from ex
+	except redis.exceptions.AuthenticationError as ex:
+		raise click.ClickException(f"Redis authentication failed: {ex}") from ex
 
 
 @entry_point.command("run-daemon")
@@ -124,52 +136,63 @@ def cli_run_daemon():
 	asyncio.run(main())
 
 
-test_choices: list = [
-	"frappe-ping",
-	"pickler",
-	"redis",
-	"sql",
-	"test-rq-hello-world",
-]
-
-
 @entry_point.command("test")
-@click.argument("command", type=click.Choice(test_choices, case_sensitive=False))
-def cli_test(command):
+def cli_test():
 	"""
-	Run a diagnostic test.
+	Run all diagnostic tests sequentially: Redis, SQL, Frappe HTTP, pickler, RQ hello-world.
 	"""
-	match command:
-		case "frappe-ping":
-			import requests
+	from btu_scheduler.lib.diagnostics import (
+		diagnose_frappe_ping,
+		diagnose_pickler,
+		diagnose_redis,
+		diagnose_rq_hello_world,
+		diagnose_sql,
+	)
 
-			from btu_scheduler.lib.diagnostics import diagnose_frappe_ping
+	passed = 0
+	failed = 0
 
-			try:
-				diagnose_frappe_ping()
-			except requests.exceptions.ConnectionError as ex:
-				click.echo(ex)
+	click.echo("\n--- Redis ---")
+	try:
+		diagnose_redis()
+		click.echo("Connection OK.")
+		passed += 1
+	except Exception as ex:
+		click.echo(f"FAILED: {ex}")
+		failed += 1
 
-		case "pickler":
-			from btu_scheduler.lib.diagnostics import diagnose_pickler
+	click.echo("\n--- SQL ---")
+	try:
+		asyncio.run(diagnose_sql())
+		passed += 1
+	except Exception as ex:
+		click.echo(f"FAILED: {ex}")
+		failed += 1
 
-			diagnose_pickler()
+	click.echo("\n--- Frappe HTTP ---")
+	try:
+		diagnose_frappe_ping()
+		passed += 1
+	except Exception as ex:
+		click.echo(f"FAILED: {ex}")
+		failed += 1
 
-		case "redis":
-			from btu_scheduler.lib.diagnostics import diagnose_redis
+	click.echo("\n--- Pickler ---")
+	try:
+		diagnose_pickler()
+		passed += 1
+	except Exception as ex:
+		click.echo(f"FAILED: {ex}")
+		failed += 1
 
-			try:
-				diagnose_redis()
-				click.echo("Redis connection successful.")
-			except Exception as ex:
-				click.echo(f"Error: {ex}")
+	click.echo("\n--- RQ Hello World ---")
+	try:
+		diagnose_rq_hello_world()
+		passed += 1
+	except Exception as ex:
+		click.echo(f"FAILED: {ex}")
+		failed += 1
 
-		case "sql":
-			from btu_scheduler.lib.diagnostics import diagnose_sql
-
-			asyncio.run(diagnose_sql(quiet=False))
-
-		case "test-rq-hello-world":
-			from btu_scheduler.lib.diagnostics import diagnose_rq_hello_world
-
-			diagnose_rq_hello_world()
+	click.echo(f"\n{passed}/{passed + failed} tests passed.")
+	if failed:
+		raise SystemExit(1)
