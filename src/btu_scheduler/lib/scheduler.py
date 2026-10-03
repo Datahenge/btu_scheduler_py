@@ -8,11 +8,10 @@ from zoneinfo import ZoneInfo
 import redis
 import structlog
 
-from btu_scheduler.lib.btu_rq import create_connection
-from btu_scheduler.lib.sql import get_enabled_task_schedules
+from btu_scheduler.lib.data_access import get_enabled_task_schedules
+from btu_scheduler.lib.scheduled_store import get_scheduled_store
 from btu_scheduler.lib.structs import BtuTaskSchedule
 
-RQ_KEY_SCHEDULED_TASKS = "btu_scheduler:task_execution_times"
 DST_FIRED_CACHE_TTL_SECS = 90_000  # 25 hours — long enough to outlast any DST transition
 log = structlog.get_logger(__name__)
 
@@ -111,21 +110,11 @@ def add_task_schedule_to_rq(task_schedule: BtuTaskSchedule):
 		next_execution_as_datetime_utc=next_runtimes[0],
 	)
 
-	redis_conn = create_connection()
-
-	# NOTE:  Earlier versions of zadd accepted 3 values: "redis_key_name", data, score.
-	#        Now you must pass 2: "redis_key_name" plus a dictionary:  {data1: score1, data2: score2}
-
-	# NOTE:  The response from zadd is the number of records added.  Value 0 means the record already existed, and no write was necessary.
-
-	try:
-		members_added = redis_conn.zadd(
-			RQ_KEY_SCHEDULED_TASKS,
-			{rq_scheduled_task.to_key(): rq_scheduled_task.next_execution_as_unix_timestamp},
-		)
-	except redis.exceptions.ConnectionError:
-		log.error(f"add_task_schedule_to_rq(): Cannot connect to Redis for Task Schedule {task_schedule.id}.")
-		return
+	# NOTE:  The response from add() is the number of records added.  Value 0 means the record
+	#        already existed (or, in 'direct' mode, that Redis was unreachable), and no write happened.
+	members_added = get_scheduled_store().add(
+		rq_scheduled_task.to_key(), rq_scheduled_task.next_execution_as_unix_timestamp
+	)
 
 	if members_added > 0:
 		messages = []
@@ -157,15 +146,8 @@ def fetch_task_schedules_ready_for_rq(sched_before_unix_time: int) -> list:
 	# represents the Unix Timestamp the Job is supposed to execute on.  By fetching ALL values below a certain
 	# threshold (Timestamp), the program knows precisely which Task Schedules to enqueue.
 
-	log.debug(
-		"fetch_task_schedules_ready_for_rq() : reviewing 'Next Execution Times' for each Task Schedule in Redis..."
-	)
-	redis_conn = create_connection()
-	try:
-		zranges: list = redis_conn.zrange(RQ_KEY_SCHEDULED_TASKS, 0, sched_before_unix_time, byscore=True)
-	except redis.exceptions.ConnectionError:
-		log.error("fetch_task_schedules_ready_for_rq(): Cannot connect to Redis; returning empty list.")
-		return []
+	log.debug("fetch_task_schedules_ready_for_rq() : reviewing 'Next Execution Times' for each Task Schedule...")
+	zranges: list = get_scheduled_store().range_le(sched_before_unix_time)
 	if not zranges:
 		return []
 
@@ -198,42 +180,41 @@ async def run_immediate_scheduled_task(task_schedule_instance: RQScheduledTask, 
 	Create a Python RQ Task and assign to a Queue, so the next available worker can run it.
 	"""
 	log.info(
-		f">>>>> Time To Make The Donuts! (enqueuing Redis Job '{task_schedule_instance.task_schedule_id}' for immediate execution)"
+		f">>>>> Time To Make The Donuts! (enqueuing Job '{task_schedule_instance.task_schedule_id}' for immediate execution)"
 	)
-	redis_conn = create_connection()
+	store = get_scheduled_store()
 
-	# 1. Read the SQL database to construct a BTU Task Schedule struct.
+	# 1. Read the Task Schedule definition (SQL or Frappe REST, depending on connectivity_mode).
 	try:
 		task_schedule = await BtuTaskSchedule.init_from_schedule_key(task_schedule_instance.task_schedule_id)
 	except Exception as ex:
-		log.error(f"Unable to read Task Schedule from the SQL database. Error = {ex}")
+		log.error(f"Unable to read Task Schedule definition. Error = {ex}")
 		return
 
 	if not task_schedule:
-		log.error(f"Unable to read a BTU Task Schedule '{task_schedule_instance.task_schedule_id}' from SQL database.")
+		log.error(f"Unable to read a BTU Task Schedule '{task_schedule_instance.task_schedule_id}'.")
 		return
 
 	# 2. Exit early if the Task Schedule is disabled (this should be a rare scenario, but definitely worth checking.)
 	if not task_schedule.enabled:
-		log.warning(
-			f"Task Schedule {task_schedule.id} is disabled in SQL database; BTU will neither execute nor re-queue."
-		)
+		log.warning(f"Task Schedule {task_schedule.id} is disabled; BTU will neither execute nor re-queue.")
 		return
 
-	# 3. DST fall-back guard + post-enqueue Redis cleanup — both wrapped for connection resilience.
+	# 3. DST fall-back guard + post-enqueue cleanup — wrapped for connection resilience (direct mode only;
+	#    the in-memory store used in webserver mode never raises ConnectionError).
 	try:
 		dst_cache_key = _dst_fired_cache_key(
 			task_schedule.id,
 			task_schedule_instance.next_execution_as_datetime_utc,
 			task_schedule.cron_timezone,
 		)
-		if redis_conn.exists(dst_cache_key):
+		if store.dst_fired_exists(dst_cache_key):
 			local_slot = task_schedule_instance.next_execution_as_datetime_utc.astimezone(task_schedule.cron_timezone)
 			log.warning(
 				f"DST duplicate suppressed: Task Schedule {task_schedule.id} already fired for "
 				f"local slot {local_slot:%Y-%m-%d %H:%M} ({task_schedule.cron_timezone}). Skipping re-fire."
 			)
-			redis_conn.zrem(RQ_KEY_SCHEDULED_TASKS, task_schedule_instance.to_key())
+			store.remove(task_schedule_instance.to_key())
 			await internal_queue.put(task_schedule_instance.task_schedule_id)
 			return
 
@@ -244,12 +225,11 @@ async def run_immediate_scheduled_task(task_schedule_instance: RQScheduledTask, 
 			return
 
 		# Record this local slot as fired so DST fall-back cannot re-fire it.
-		redis_conn.setex(dst_cache_key, DST_FIRED_CACHE_TTL_SECS, "1")
+		store.dst_fired_set(dst_cache_key, DST_FIRED_CACHE_TTL_SECS)
 
-		# IMPORTANT: Remove this Task from the BTU Schedule Key (so it doesn't accidentally get executed twice)
-		redis_result = redis_conn.zrem(RQ_KEY_SCHEDULED_TASKS, task_schedule_instance.to_key())
-		if redis_result != 1:
-			log.error(f"Unable to remove Task Schedule Instance using 'zrem'.  Response from Redis = {redis_result}")
+		# IMPORTANT: Remove this Task from the schedule store (so it doesn't accidentally get executed twice)
+		if not store.remove(task_schedule_instance.to_key()):
+			log.error(f"Unable to remove Task Schedule Instance '{task_schedule_instance.to_key()}' from the store.")
 			return
 
 		# Finally, recalculate the next Run Time.
@@ -265,43 +245,25 @@ async def run_immediate_scheduled_task(task_schedule_instance: RQScheduledTask, 
 
 def rq_get_scheduled_tasks() -> list[RQScheduledTask]:
 	"""
-	Query Redis for the values held in key RQ_KEY_SCHEDULED_TASKS
+	Query the active ScheduledStore for all pending Task Schedule instances.
 	"""
-	redis_conn = create_connection()
-	redis_result: tuple = redis_conn.zscan(
-		RQ_KEY_SCHEDULED_TASKS
-	)  # (0, [('TS-000007|1742607180', 1742607180.0), ('TS-000007|1742607360', 1742607360.0) ])
-	list_of_tsik_string = [each[0] for each in redis_result[1]]
-
+	list_of_tsik_string = get_scheduled_store().range_all()
 	wrapped_result = [RQScheduledTask.from_key(each) for each in list_of_tsik_string]
 	return wrapped_result
 
 
 def rq_cancel_scheduled_task(task_schedule_id: str) -> None:
 	"""
-	Remove a Task Schedule from the Redis database, to prevent it from executing in the future.
+	Remove a Task Schedule from the ScheduledStore, to prevent it from executing in the future.
 	"""
-	# As of changes made May 21st 2022, the members in the Ordered Set 'btu_scheduler:task_execution_times'
-	# are not just Task Schedule ID's.  The Unix Time is a suffix.  Removing members now requires some "starts_with" logic.
-
-	try:
-		with create_connection() as redis_conn:
-			# First, list all the keys using 'zrange btu_scheduler:task_execution_times 0 -1'
-			all_task_schedules = redis_conn.zrange(RQ_KEY_SCHEDULED_TASKS, 0, -1)
-			removed: bool = False
-
-			for each_row in all_task_schedules:
-				if each_row.startswith(task_schedule_id):
-					_ = redis_conn.zrem(RQ_KEY_SCHEDULED_TASKS, each_row)
-					removed = True
-	except redis.exceptions.ConnectionError:
-		log.error(f"rq_cancel_scheduled_task(): Cannot connect to Redis for Task Schedule {task_schedule_id}.")
-		return
+	# Members are keyed by TSIK ("{task_schedule_id}|{unix_timestamp}"), so removing by
+	# Task Schedule ID alone requires "starts_with" logic.
+	removed = get_scheduled_store().remove_by_prefix(task_schedule_id)
 
 	if removed:
-		log.info("Scheduled Task successfully removed from Redis Queue.")
+		log.info("Scheduled Task successfully removed from the store.")
 	else:
-		log.info("Scheduled Task not found in Redis Queue.")
+		log.info("Scheduled Task not found in the store.")
 
 
 def rq_print_scheduled_tasks():
@@ -313,10 +275,9 @@ def rq_print_scheduled_tasks():
 
 def clear_all_scheduled_tasks() -> bool:
 	"""
-	Clear all scheduled tasks from the Redis database.
+	Clear all scheduled tasks from the active ScheduledStore.
 	"""
-	redis_conn = create_connection()
-	redis_conn.zremrangebyrank(RQ_KEY_SCHEDULED_TASKS, 0, -1)
+	get_scheduled_store().clear()
 	return True
 
 
@@ -330,9 +291,7 @@ async def queue_full_refill(internal_queue: asyncio.Queue[str], *, check_rq: boo
 	rows_added = 0
 	enabled_schedules = await get_enabled_task_schedules()
 	if check_rq and enabled_schedules and not rq_get_scheduled_tasks():
-		log.warning(
-			"Enabled Task Schedules exist in the database but none are scheduled in Redis."
-		)
+		log.warning("Enabled Task Schedules exist in the database but none are scheduled in Redis.")
 	if not enabled_schedules:
 		return 0
 

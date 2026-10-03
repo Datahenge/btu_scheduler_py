@@ -21,9 +21,7 @@ def diagnose_redis_version():
 	version_string = conn.info("server")["redis_version"]
 	major, minor, *_ = (int(x) for x in version_string.split("."))
 	if (major, minor) < (6, 2):
-		raise RuntimeError(
-			f"Redis {version_string} is too old — BTU Scheduler requires 6.2+ for ZRANGE BYSCORE."
-		)
+		raise RuntimeError(f"Redis {version_string} is too old — BTU Scheduler requires 6.2+ for ZRANGE BYSCORE.")
 	print(f"Redis version: {version_string} (>= 6.2 required).")
 
 
@@ -83,6 +81,8 @@ def diagnose_frappe_ping(debug_mode=False):
 	response = requests.get(url=url, headers=headers, timeout=30)
 	print(f"Response Status Code: {response.status_code}")
 	print(f"Response JSON: {response.json()}")
+	if response.status_code != 200:
+		raise IOError(f"Unexpected status code from Frappe web server: {response.status_code}")
 
 
 def diagnose_pickler(debug_mode: bool = True):
@@ -150,5 +150,3 @@ def diagnose_rq_hello_world():
 
 	job.delete()
 	print(f"\u2713 Diagnostic job '{new_job_id}' removed from Redis.")
-
-

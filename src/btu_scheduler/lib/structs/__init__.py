@@ -9,7 +9,8 @@ import structlog
 
 from btu_scheduler.lib import btu_cron
 from btu_scheduler.lib.config import load_config
-from btu_scheduler.lib.sql import get_task_by_id, get_task_schedule_by_id
+from btu_scheduler.lib.data_access import get_task_schedule_by_id
+from btu_scheduler.lib.sql import get_task_by_id
 from btu_scheduler.lib.utils import build_frappe_headers, get_frappe_base_url
 
 log = structlog.get_logger(__name__)

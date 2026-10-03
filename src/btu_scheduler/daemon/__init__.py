@@ -7,7 +7,7 @@ import structlog
 
 from btu_scheduler.lib.config import bootstrap_scheduler
 from btu_scheduler.lib.scheduler import queue_full_refill
-from btu_scheduler.lib.diagnostics import diagnose_redis, diagnose_sql
+from btu_scheduler.lib.diagnostics import diagnose_redis, diagnose_sql, diagnose_frappe_ping
 
 log = structlog.get_logger(__name__)
 
@@ -27,20 +27,30 @@ async def main():
 		internal_queue_consumer,
 		internal_queue_producer,
 		redis_command_listener,
+		webserver_command_poller,
 		review_next_execution_times,
 	)
 
 	settings, _bootstrap_log = bootstrap_scheduler(handle_signals=True)
-	log.debug("Initialized configuration in Main Thread.")
+	log.debug("Initialized configuration in Main Thread.", connectivity_mode=settings.connectivity_mode)
 
-	# Make sure Redis is available.
-	try:
-		diagnose_redis()  # Synchronous function.
-	except Exception as ex:
-		log.error(f"Unable to connect to Frappe Redis queue: {ex}")
-		return
-
-	await diagnose_sql(quiet=True)
+	if settings.connectivity_mode == "direct":
+		# Make sure Redis and SQL are available.
+		try:
+			diagnose_redis()  # Synchronous function.
+		except Exception as ex:
+			log.error(f"Unable to connect to Frappe Redis queue: {ex}")
+			return
+		await diagnose_sql(quiet=True)
+		command_listener = redis_command_listener
+	else:
+		# webserver mode: no direct SQL/Redis access — just confirm the web server is reachable.
+		try:
+			diagnose_frappe_ping()
+		except Exception as ex:
+			log.error(f"Unable to reach Frappe web server: {ex}")
+			return
+		command_listener = webserver_command_poller
 
 	internal_queue = asyncio.Queue()
 
@@ -55,7 +65,7 @@ async def main():
 		asyncio.create_task(internal_queue_consumer(internal_queue), name="Internal Queue - Consumer"),
 		asyncio.create_task(internal_queue_producer(internal_queue), name="Internal Queue - Producer"),
 		asyncio.create_task(review_next_execution_times(internal_queue), name="Review Next Execution Times"),
-		asyncio.create_task(redis_command_listener(internal_queue), name="Redis RPC Command Listener"),
+		asyncio.create_task(command_listener(internal_queue), name="Scheduler Command Listener"),
 	]
 	shutdown_task = asyncio.create_task(_wait_for_shutdown(settings.shutdown_event), name="Shutdown Watcher")
 

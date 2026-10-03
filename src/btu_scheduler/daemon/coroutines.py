@@ -16,6 +16,7 @@ log = structlog.get_logger(__name__)
 # Must match REDIS_COMMAND_QUEUE in btu/btu_api/scheduler.py.
 REDIS_COMMAND_QUEUE = "btu:scheduler:commands"
 
+
 async def internal_queue_consumer(shared_queue: asyncio.Queue[str]) -> None:
 	"""
 	Reads TSIKs from the internal coroutine Queue, and adds them to Python RQ.
@@ -93,34 +94,32 @@ async def review_next_execution_times(shared_queue: asyncio.Queue[str]) -> None:
 		)  # wait N seconds before trying again.
 
 
-async def _dispatch_redis_command(request_type: str, request_content: str, internal_queue: asyncio.Queue[str]) -> None:
+async def _dispatch_command(request_type: str, request_content: str, internal_queue: asyncio.Queue[str]) -> None:
 	"""
-	Execute a command that arrived via the Redis RPC queue.
-
-	Called after the receipt ACK has already been sent, so this function
-	can take as long as it needs without affecting the caller's wait time.
+	Execute a command that arrived via either inbound control-plane channel: the Redis RPC
+	queue (connectivity_mode=direct) or polling the Frappe web server (connectivity_mode=webserver).
 	"""
-	log.info(f"Redis RPC: dispatching '{request_type}' with content '{request_content}'.")
+	log.info(f"Command: dispatching '{request_type}' with content '{request_content}'.")
 
 	if request_type == "ping":
-		log.info("Redis RPC: ping received.")
+		log.info("Command: ping received.")
 		return
 
 	if request_type == "create_task_schedule":
 		await internal_queue.put(request_content)
-		log.info(f"Redis RPC: enqueued Task Schedule ID '{request_content}'.")
+		log.info(f"Command: enqueued Task Schedule ID '{request_content}'.")
 		return
 
 	if request_type == "cancel_task_schedule":
 		try:
 			scheduler.rq_cancel_scheduled_task(request_content)
 			scheduler.rq_print_scheduled_tasks()
-			log.info(f"Redis RPC: cancelled Task Schedule '{request_content}'.")
+			log.info(f"Command: cancelled Task Schedule '{request_content}'.")
 		except Exception as ex:
-			log.error(f"Redis RPC: error cancelling Task Schedule '{request_content}': {ex}")
+			log.error(f"Command: error cancelling Task Schedule '{request_content}': {ex}")
 		return
 
-	log.warning(f"Redis RPC: unrecognised request_type '{request_type}'.")
+	log.warning(f"Command: unrecognised request_type '{request_type}'.")
 
 
 async def redis_command_listener(internal_queue: asyncio.Queue[str]) -> None:
@@ -181,8 +180,36 @@ async def redis_command_listener(internal_queue: asyncio.Queue[str]) -> None:
 				redis_conn.expire(response_key, 60)  # auto-clean orphaned keys if caller died
 
 			# Step 2: Now execute the command (caller is already unblocked).
-			await _dispatch_redis_command(request_type, request_content, internal_queue)
+			await _dispatch_command(request_type, request_content, internal_queue)
 
 		except Exception as ex:
 			log.error(f"Redis RPC listener unhandled error: {ex}")
 			await asyncio.sleep(1)  # brief back-off before resuming
+
+
+async def webserver_command_poller(internal_queue: asyncio.Queue[str]) -> None:
+	"""
+	Control-plane listener for connectivity_mode=webserver.
+
+	BTU has no direct Redis access in this mode, so inbound commands (cancel, reload)
+	can't be pushed to the daemon via Redis RPC. Instead, the daemon polls a Frappe
+	endpoint that drains the same command queue server-side and returns it over HTTP.
+
+	This trades the near-instant delivery of Redis RPC's BLPOP for a delay of up to
+	one polling interval — see docs/technical/04-webserver-only-architecture.md.
+	"""
+	from btu_scheduler.lib import frappe_api
+
+	log.info("Webserver command poller started (connectivity_mode=webserver).")
+
+	while True:
+		try:
+			commands = await asyncio.to_thread(frappe_api.get_pending_scheduler_commands)
+			for command in commands:
+				await _dispatch_command(
+					command.get("request_type", ""), command.get("request_content", ""), internal_queue
+				)
+		except Exception as ex:
+			log.error(f"Webserver command poller unhandled error: {ex}")
+
+		await asyncio.sleep(load_config().scheduler_polling_interval)
