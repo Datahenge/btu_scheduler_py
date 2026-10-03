@@ -15,7 +15,6 @@ from btu_scheduler.cli import entry_point
 
 
 class TestAboutCommand(unittest.TestCase):
-
 	def test_exits_zero(self):
 		result = CliRunner().invoke(entry_point, ["about"])
 		self.assertEqual(result.exit_code, 0)
@@ -30,7 +29,6 @@ class TestAboutCommand(unittest.TestCase):
 
 
 class TestHelpAndVersion(unittest.TestCase):
-
 	def test_root_help_exits_zero(self):
 		result = CliRunner().invoke(entry_point, ["--help"])
 		self.assertEqual(result.exit_code, 0)
@@ -73,7 +71,6 @@ class TestConfigPathCommand(unittest.TestCase):
 
 
 class TestTestSubcommand(unittest.TestCase):
-
 	def test_help_exits_zero(self):
 		result = CliRunner().invoke(entry_point, ["test", "--help"])
 		self.assertEqual(result.exit_code, 0)
@@ -104,7 +101,7 @@ class TestListScheduledTasks(unittest.TestCase):
 
 		import redis
 
-		with patch("btu_scheduler.lib.scheduler.create_connection") as mock_conn:
+		with patch("btu_scheduler.lib.scheduled_store.create_connection") as mock_conn:
 			mock_conn.return_value.zscan.side_effect = redis.exceptions.ConnectionError("Connection refused")
 			result = CliRunner().invoke(entry_point, ["list-scheduled-tasks"])
 		self.assertNotEqual(result.exit_code, 0)
@@ -114,11 +111,41 @@ class TestListScheduledTasks(unittest.TestCase):
 
 		import redis
 
-		with patch("btu_scheduler.lib.scheduler.create_connection") as mock_conn:
+		with patch("btu_scheduler.lib.scheduled_store.create_connection") as mock_conn:
 			mock_conn.return_value.zscan.side_effect = redis.exceptions.ConnectionError("Connection refused")
 			result = CliRunner().invoke(entry_point, ["list-scheduled-tasks"])
 		self.assertIn("Cannot connect to Redis", result.output)
 		self.assertNotIn("Traceback", result.output)
+
+
+class TestConnectivityModeGuard(unittest.TestCase):
+	"""
+	clear-scheduled-tasks and list-scheduled-tasks inspect/mutate the scheduled-task
+	store directly, which only makes sense in connectivity_mode=direct (Redis, shared
+	with the running daemon) — not connectivity_mode=webserver (in-process memory inside
+	the daemon, invisible to a separate CLI invocation). See _require_direct_mode().
+	"""
+
+	def _webserver_mode_settings(self):
+		from types import SimpleNamespace
+
+		return SimpleNamespace(connectivity_mode="webserver")
+
+	def test_clear_scheduled_tasks_blocked_in_webserver_mode(self):
+		from unittest.mock import patch
+
+		with patch("btu_scheduler.lib.config.load_config", return_value=self._webserver_mode_settings()):
+			result = CliRunner().invoke(entry_point, ["clear-scheduled-tasks"])
+		self.assertNotEqual(result.exit_code, 0)
+		self.assertIn("connectivity_mode=direct", result.output)
+
+	def test_list_scheduled_tasks_blocked_in_webserver_mode(self):
+		from unittest.mock import patch
+
+		with patch("btu_scheduler.lib.config.load_config", return_value=self._webserver_mode_settings()):
+			result = CliRunner().invoke(entry_point, ["list-scheduled-tasks"])
+		self.assertNotEqual(result.exit_code, 0)
+		self.assertIn("connectivity_mode=direct", result.output)
 
 
 if __name__ == "__main__":

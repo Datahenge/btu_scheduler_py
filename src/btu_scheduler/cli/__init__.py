@@ -91,14 +91,37 @@ def cmd_config(command):
 			raise click.ClickException(f"Subcommand '{command}' not recognized.")
 
 
+def _require_direct_mode(action: str) -> None:
+	"""
+	Several CLI commands inspect/mutate the scheduled-task store directly. In
+	connectivity_mode=direct that store is Redis — shared with the running daemon, so a
+	separate CLI invocation can see and change it. In connectivity_mode=webserver it's
+	in-process memory inside the daemon (see lib/scheduled_store.py); a CLI invocation
+	has its own, unrelated instance, so these commands would silently no-op or report
+	nothing without this guard.
+	"""
+	from btu_scheduler.lib.config import load_config
+
+	settings = _require_config(load_config)
+	if settings.connectivity_mode != "direct":
+		raise click.ClickException(
+			f"'{action}' requires connectivity_mode=direct. In connectivity_mode=webserver, the "
+			"scheduled-task store is in-process memory inside the running daemon — a separate CLI "
+			"invocation cannot see or change it. Use 'btu test' to check connectivity, or check the "
+			"daemon's logs (e.g. 'journalctl -u btu-scheduler') for its current state."
+		)
+
+
 @entry_point.command("clear-scheduled-tasks")
 def cli_clear_scheduled_tasks():
 	"""
-	Clear all scheduled tasks from the Redis database.
+	Clear all scheduled tasks from the Redis database. Requires connectivity_mode=direct.
 	"""
 	import redis
 
 	from btu_scheduler.lib.scheduler import clear_all_scheduled_tasks
+
+	_require_direct_mode("clear-scheduled-tasks")
 
 	try:
 		clear_all_scheduled_tasks()
@@ -112,11 +135,13 @@ def cli_clear_scheduled_tasks():
 @entry_point.command("list-scheduled-tasks")
 def cli_list_scheduled_tasks():
 	"""
-	List Schedule IDs already in the scheduler queue.
+	List Schedule IDs already in the scheduler queue. Requires connectivity_mode=direct.
 	"""
 	import redis
 
 	from btu_scheduler.lib.scheduler import rq_print_scheduled_tasks
+
+	_require_direct_mode("list-scheduled-tasks")
 
 	try:
 		rq_print_scheduled_tasks()
@@ -124,6 +149,141 @@ def cli_list_scheduled_tasks():
 		raise click.ClickException(f"Cannot connect to Redis: {ex}") from ex
 	except redis.exceptions.AuthenticationError as ex:
 		raise click.ClickException(f"Redis authentication failed: {ex}") from ex
+
+
+@entry_point.command("install-systemd")
+@click.option(
+	"--mode",
+	"connectivity_mode",
+	type=click.Choice(["direct", "webserver"]),
+	default="direct",
+	show_default=True,
+	help="connectivity_mode to write into the environment file.",
+)
+@click.option(
+	"--service-user",
+	default="btu-scheduler",
+	show_default=True,
+	help="System account the daemon runs as; created automatically if missing.",
+)
+@click.option(
+	"--env-file",
+	default="/etc/btu-scheduler/btu-scheduler.env",
+	show_default=True,
+)
+@click.option(
+	"--unit-file",
+	default="/etc/systemd/system/btu-scheduler.service",
+	show_default=True,
+)
+@click.option("--service-name", default="btu-scheduler", show_default=True)
+@click.option(
+	"--non-interactive",
+	is_flag=True,
+	default=False,
+	help="Fail instead of prompting; every required BTU_SCHEDULER_* value must already be set.",
+)
+@click.option("--enable/--no-enable", default=True, help="Run systemctl daemon-reload + enable --now afterward.")
+@click.option("--create-user/--no-create-user", default=True, help="Create --service-user if it doesn't exist.")
+@click.option("--force", is_flag=True, default=False, help="Overwrite an existing env/unit file without asking.")
+@click.option(
+	"--dry-run",
+	is_flag=True,
+	default=False,
+	help="Print the env file and unit file to stdout instead of writing/enabling anything. No root required.",
+)
+def cli_install_systemd(
+	connectivity_mode,
+	service_user,
+	env_file,
+	unit_file,
+	service_name,
+	non_interactive,
+	enable,
+	create_user,
+	force,
+	dry_run,
+):
+	"""
+	Generate the EnvironmentFile and systemd unit for running the daemon as a service.
+
+	Must be run as root (except --dry-run). Prompts for any required BTU_SCHEDULER_*
+	value not already present in the environment (pass --non-interactive to require them
+	all up front). Collected values are validated the same way the daemon itself
+	validates them before anything is written to disk.
+	"""
+	import os
+	import pathlib
+
+	from btu_scheduler.lib import systemd_install as si
+
+	if not dry_run and os.geteuid() != 0:
+		raise click.ClickException(
+			"install-systemd must be run as root (it creates a system user, writes to "
+			"/etc, and installs a systemd unit). Re-run with sudo, or pass --dry-run to preview "
+			"the generated files without needing root."
+		)
+
+	env_path = pathlib.Path(env_file)
+	unit_path = pathlib.Path(unit_file)
+
+	if not dry_run and not force:
+		for path in (env_path, unit_path):
+			if path.exists() and not click.confirm(f"{path} already exists. Overwrite?", default=False):
+				raise click.ClickException(f"Aborted: {path} already exists. Pass --force to overwrite without asking.")
+
+	def prompter(prompt_text: str, default: str | None, is_secret: bool) -> str:
+		reply = click.prompt(prompt_text, default=default or "", hide_input=is_secret, show_default=bool(default))
+		return reply
+
+	try:
+		raw_values = si.collect_settings(
+			connectivity_mode, env=dict(os.environ), non_interactive=non_interactive, prompter=prompter
+		)
+		settings = si.validate_settings(raw_values)
+		exec_path = si.find_btu_executable()
+		unit_content = si.render_unit_file(service_user=service_user, exec_path=exec_path, env_file=str(env_path))
+		env_content = si.render_env_file(settings)
+
+		if dry_run:
+			click.echo(f"# {env_path}\n{env_content}")
+			click.echo(f"# {unit_path}\n{unit_content}")
+			click.echo("Dry run only — nothing was written, no user created, nothing enabled.")
+			return
+
+		if create_user and not si.user_exists(service_user):
+			click.echo(f"Creating system user '{service_user}'...")
+			si.create_service_user(service_user)
+
+		env_path.parent.mkdir(parents=True, exist_ok=True)
+		env_path.write_text(env_content)
+		env_path.chmod(0o600)
+		try:
+			import grp
+			import pwd as pwd_module
+
+			uid = pwd_module.getpwnam(service_user).pw_uid
+			gid = grp.getgrnam(service_user).gr_gid
+			os.chown(env_path, uid, gid)
+		except KeyError:
+			click.echo(f"Warning: could not resolve uid/gid for '{service_user}'; leaving {env_path} owned by root.")
+
+		unit_path.write_text(unit_content)
+
+		click.echo(f"Wrote {env_path} (mode 600, owned by {service_user}).")
+		click.echo(f"Wrote {unit_path}.")
+
+		if enable:
+			si.enable_service(service_name)
+			click.echo(f"Enabled and started {service_name}.service.")
+			click.echo(f"Check status with: systemctl status {service_name}")
+			click.echo(f"Follow logs with:  journalctl -u {service_name} -f")
+		else:
+			click.echo("Skipped enabling the service (--no-enable). Run manually with:")
+			click.echo("  systemctl daemon-reload && systemctl enable --now " + service_name)
+
+	except si.InstallError as ex:
+		raise click.ClickException(str(ex)) from ex
 
 
 @entry_point.command("run-daemon")
@@ -140,7 +300,11 @@ def cli_run_daemon():
 def cli_test():
 	"""
 	Run all diagnostic tests sequentially: Redis, SQL, Frappe HTTP, pickler, RQ hello-world.
+
+	Redis/SQL/RQ checks are skipped when BTU_SCHEDULER_CONNECTIVITY_MODE=webserver,
+	since that mode never connects to them directly.
 	"""
+	from btu_scheduler.lib.config import load_config
 	from btu_scheduler.lib.diagnostics import (
 		diagnose_frappe_ping,
 		diagnose_pickler,
@@ -153,31 +317,36 @@ def cli_test():
 
 	passed = 0
 	failed = 0
+	connectivity_mode = _require_config(load_config).connectivity_mode
 
-	click.echo("\n--- Redis ---")
-	try:
-		diagnose_redis()
-		click.echo("Connection OK.")
-		passed += 1
-	except Exception as ex:
-		click.echo(f"FAILED: {ex}")
-		failed += 1
+	if connectivity_mode == "direct":
+		click.echo("\n--- Redis ---")
+		try:
+			diagnose_redis()
+			click.echo("Connection OK.")
+			passed += 1
+		except Exception as ex:
+			click.echo(f"FAILED: {ex}")
+			failed += 1
 
-	click.echo("\n--- Redis Version ---")
-	try:
-		diagnose_redis_version()
-		passed += 1
-	except Exception as ex:
-		click.echo(f"FAILED: {ex}")
-		failed += 1
+		click.echo("\n--- Redis Version ---")
+		try:
+			diagnose_redis_version()
+			passed += 1
+		except Exception as ex:
+			click.echo(f"FAILED: {ex}")
+			failed += 1
 
-	click.echo("\n--- SQL ---")
-	try:
-		asyncio.run(diagnose_sql())
-		passed += 1
-	except Exception as ex:
-		click.echo(f"FAILED: {ex}")
-		failed += 1
+		click.echo("\n--- SQL ---")
+		try:
+			asyncio.run(diagnose_sql())
+			passed += 1
+		except Exception as ex:
+			click.echo(f"FAILED: {ex}")
+			failed += 1
+	else:
+		click.echo("\n--- Redis / SQL ---")
+		click.echo("Skipped: connectivity_mode='webserver' does not use direct Redis or SQL access.")
 
 	click.echo("\n--- Frappe HTTP ---")
 	try:
@@ -195,21 +364,39 @@ def cli_test():
 		click.echo(f"FAILED: {ex}")
 		failed += 1
 
-	click.echo("\n--- RQ Hello World ---")
-	try:
-		diagnose_rq_hello_world()
-		passed += 1
-	except Exception as ex:
-		click.echo(f"FAILED: {ex}")
-		failed += 1
+	if connectivity_mode == "direct":
+		click.echo("\n--- RQ Hello World ---")
+		try:
+			diagnose_rq_hello_world()
+			passed += 1
+		except Exception as ex:
+			click.echo(f"FAILED: {ex}")
+			failed += 1
 
-	click.echo("\n--- RQ Workers ---")
-	try:
-		diagnose_rq_workers()
-		passed += 1
-	except Exception as ex:
-		click.echo(f"FAILED: {ex}")
-		failed += 1
+		click.echo("\n--- RQ Workers ---")
+		try:
+			diagnose_rq_workers()
+			passed += 1
+		except Exception as ex:
+			click.echo(f"FAILED: {ex}")
+			failed += 1
+	else:
+		click.echo("\n--- RQ Hello World / RQ Workers ---")
+		click.echo("Skipped: connectivity_mode='webserver' does not use direct Redis access.")
+
+	click.echo("\n--- Systemd ---")
+	import shutil as _shutil
+	import subprocess as _subprocess
+
+	if not _shutil.which("systemctl"):
+		click.echo(
+			"Not applicable: systemctl not found on this host (not a systemd system, or running in a container)."
+		)
+	else:
+		service_name = "btu-scheduler"
+		for check in ("is-enabled", "is-active"):
+			result = _subprocess.run(["systemctl", check, service_name], capture_output=True, text=True, check=False)
+			click.echo(f"{check} {service_name}: {result.stdout.strip() or result.stderr.strip()}")
 
 	click.echo(f"\n{passed}/{passed + failed} tests passed.")
 	if failed:
