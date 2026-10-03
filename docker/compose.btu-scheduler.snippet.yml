@@ -1,0 +1,73 @@
+# BTU Scheduler — Docker Compose service snippet
+#
+# Paste the `btu-scheduler:` service block below into the `services:` section of the
+# ERPNext docker-compose.yml it belongs to (e.g. a frappe_docker-style stack). It is
+# one sibling container among the others already defined there — it is not a standalone
+# compose file.
+#
+# Values driven by ${VARS} below are read from a `.env` file placed next to the
+# docker-compose.yml that uses this snippet (Compose loads that file automatically —
+# no extra flag needed). An example is in docker/btu-scheduler.env.example in this repo.
+#
+# Two connectivity modes are supported — pick one:
+#
+#   "direct"     BTU reaches MariaDB and Redis directly, by Compose service name
+#                (stable DNS within this project — no IP to track down). Requires
+#                BTU_SCHEDULER_SQL_* and BTU_SCHEDULER_RQ_* below.
+#   "webserver"  BTU talks only to the Frappe web server over HTTPS. Use this when
+#                BTU is NOT a sibling container in this same Compose project — a
+#                different host, or a managed/hosted ERPNext. No SQL/Redis needed.
+#
+# See docs/technical/04-webserver-only-architecture.md for the full write-up.
+
+services:
+
+  btu-scheduler:
+    # Option A: build from this repo directly.
+    build:
+      context: https://github.com/Datahenge/btu_scheduler_py.git
+      dockerfile: Dockerfile
+    # Option B: use a pre-built image instead of Option A above.
+    # image: datahenge/btu-scheduler:1.0.0
+
+    container_name: btu-scheduler
+    restart: unless-stopped
+
+    environment:
+      BTU_SCHEDULER_CONNECTIVITY_MODE: ${BTU_SCHEDULER_CONNECTIVITY_MODE:-direct}
+      BTU_SCHEDULER_FULL_REFRESH_INTERNAL_SECS: ${BTU_SCHEDULER_FULL_REFRESH_INTERNAL_SECS:-30}
+      BTU_SCHEDULER_SCHEDULER_POLLING_INTERVAL: ${BTU_SCHEDULER_SCHEDULER_POLLING_INTERVAL:-30}
+      BTU_SCHEDULER_LOG_LEVEL: ${BTU_SCHEDULER_LOG_LEVEL:-INFO}
+
+      # --- Required only when BTU_SCHEDULER_CONNECTIVITY_MODE=direct ---
+      # Defaults below assume BTU is co-located in this same Compose project, reaching
+      # MariaDB and Redis by their Compose service names. Rename to match the actual
+      # service names in the target docker-compose.yml (frappe_docker commonly uses
+      # "mariadb" and "redis-queue"; adjust if this stack differs).
+      BTU_SCHEDULER_SQL_TYPE: ${BTU_SCHEDULER_SQL_TYPE:-mariadb}
+      BTU_SCHEDULER_SQL_HOST: ${BTU_SCHEDULER_SQL_HOST:-mariadb}
+      BTU_SCHEDULER_SQL_PORT: ${BTU_SCHEDULER_SQL_PORT:-3306}
+      BTU_SCHEDULER_SQL_DATABASE: ${BTU_SCHEDULER_SQL_DATABASE:?set in .env}
+      BTU_SCHEDULER_SQL_USER: ${BTU_SCHEDULER_SQL_USER:?set in .env}
+      BTU_SCHEDULER_SQL_PASSWORD: ${BTU_SCHEDULER_SQL_PASSWORD:?set in .env}
+      BTU_SCHEDULER_RQ_HOST: ${BTU_SCHEDULER_RQ_HOST:-redis-queue}
+      BTU_SCHEDULER_RQ_PORT: ${BTU_SCHEDULER_RQ_PORT:-6379}
+      BTU_SCHEDULER_RQ_PASSWORD: ${BTU_SCHEDULER_RQ_PASSWORD:-}
+
+      # --- Always required (both connectivity modes) ---
+      # In 'direct' mode this can point at the "backend"/"websocket" web service's
+      # Compose name on port 8000. In 'webserver' mode, point this at the site's public
+      # DNS name over HTTPS instead (BTU_SCHEDULER_WEBSERVER_PORT: 443).
+      BTU_SCHEDULER_WEBSERVER_IP: ${BTU_SCHEDULER_WEBSERVER_IP:?set in .env}
+      BTU_SCHEDULER_WEBSERVER_PORT: ${BTU_SCHEDULER_WEBSERVER_PORT:-8000}
+      BTU_SCHEDULER_WEBSERVER_TOKEN: ${BTU_SCHEDULER_WEBSERVER_TOKEN:?set in .env}
+      BTU_SCHEDULER_WEBSERVER_HOST_HEADER: ${BTU_SCHEDULER_WEBSERVER_HOST_HEADER:-}
+
+    # Join the same network as the rest of the ERPNext stack so Compose service-name
+    # DNS resolves. Rename "default" to match the target compose file's network name.
+    networks:
+      - default
+
+    depends_on:
+      - mariadb
+      - redis-queue
