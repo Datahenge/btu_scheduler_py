@@ -148,5 +148,34 @@ class TestConnectivityModeGuard(unittest.TestCase):
 		self.assertIn("connectivity_mode=direct", result.output)
 
 
+class TestInstallSystemdDryRun(unittest.TestCase):
+	"""--dry-run needs no root, so install-systemd's own logic can be exercised directly."""
+
+	def test_blank_answer_reprompts_for_required_field_with_no_default(self):
+		# webserver_token has no default and no env value here, so an empty Enter-press must
+		# make click re-ask instead of writing BTU_SCHEDULER_WEBSERVER_TOKEN= with no value.
+		input_lines = "\n\n\n\n\ntoken abc:def\n\n"
+		result = CliRunner().invoke(
+			entry_point,
+			["install-systemd", "--mode", "webserver", "--dry-run"],
+			input=input_lines,
+			env={"BTU_SCHEDULER_WEBSERVER_IP": "erp.example.com"},
+		)
+		self.assertEqual(result.exit_code, 0, msg=result.output)
+		self.assertIn("BTU_SCHEDULER_WEBSERVER_TOKEN=token abc:def", result.output)
+
+	def test_service_name_override_moves_default_unit_file_path(self):
+		result = CliRunner().invoke(
+			entry_point,
+			["install-systemd", "--mode", "webserver", "--service-name", "myapp", "--non-interactive", "--dry-run"],
+			env={
+				"BTU_SCHEDULER_WEBSERVER_IP": "erp.example.com",
+				"BTU_SCHEDULER_WEBSERVER_TOKEN": "token abc:def",
+			},
+		)
+		self.assertEqual(result.exit_code, 0, msg=result.output)
+		self.assertIn("/etc/systemd/system/myapp.service", result.output)
+
+
 if __name__ == "__main__":
 	unittest.main()

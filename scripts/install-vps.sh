@@ -18,7 +18,8 @@
 # Anything else — recognized or not — is forwarded as-is to `btu install-systemd`,
 # e.g.:
 #   sudo ./install-vps.sh --source local . -- --mode webserver --non-interactive
-#   sudo ./install-vps.sh --dry-run          # preview only, forwarded straight through
+#   sudo ./install-vps.sh --dry-run          # still needs root (this script writes to /opt);
+#                                             # --dry-run itself is just forwarded to the CLI
 #
 # See `btu install-systemd --help` for everything that command accepts.
 
@@ -76,7 +77,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ "$EUID" -ne 0 ]]; then
-	echo "This script must be run as root (it writes to /opt, and hands off to 'btu install-systemd' which needs root too, unless you're only forwarding --dry-run)." >&2
+	# Root is required unconditionally — this script itself writes to /opt (venv creation,
+	# pip install) before it ever gets to forwarding args like --dry-run to 'btu install-systemd'.
+	echo "This script must be run as root (it writes to /opt, and hands off to 'btu install-systemd' which needs root too)." >&2
 	echo "Re-run with: sudo $0 $*" >&2
 	exit 1
 fi

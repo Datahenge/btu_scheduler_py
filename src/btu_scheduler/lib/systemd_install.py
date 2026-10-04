@@ -107,10 +107,25 @@ def validate_settings(values: dict[str, str]) -> SchedulerSettings:
 		raise InstallError(f"Collected settings failed validation:\n{ex}") from ex
 
 
+def _quote_env_value(value: str) -> str:
+	"""
+	Quote `value` for a systemd EnvironmentFile if needed. systemd's parser (systemd >= 246)
+	is shell-quote-aware: an unquoted value is taken as the literal rest of the line with
+	outer whitespace stripped, but a value containing a quote or backslash character needs
+	an explicit, escaped quoted string so it isn't misparsed (e.g. truncated at an unbalanced
+	embedded "). Plain values are left bare, matching previous output exactly.
+	"""
+	if value == value.strip() and not any(c in value for c in "\"'\\"):
+		return value
+	escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+	return f'"{escaped}"'
+
+
 def render_env_file(settings: SchedulerSettings) -> str:
 	"""
-	Render settings as a systemd EnvironmentFile: plain KEY=VALUE per line, no quoting.
-	Only fields relevant to settings.connectivity_mode are included.
+	Render settings as a systemd EnvironmentFile: KEY=VALUE per line, quoting values that
+	need it (see _quote_env_value). Only fields relevant to settings.connectivity_mode are
+	included.
 	"""
 	lines = [f"BTU_SCHEDULER_CONNECTIVITY_MODE={settings.connectivity_mode}"]
 	for spec in FIELD_SPECS:
@@ -119,14 +134,19 @@ def render_env_file(settings: SchedulerSettings) -> str:
 		value = getattr(settings, spec.name)
 		if value in (None, ""):
 			continue
-		lines.append(f"BTU_SCHEDULER_{spec.name.upper()}={value}")
+		lines.append(f"BTU_SCHEDULER_{spec.name.upper()}={_quote_env_value(str(value))}")
 	return "\n".join(lines) + "\n"
 
 
-def render_unit_file(*, service_user: str, exec_path: str, env_file: str) -> str:
+def render_unit_file(*, service_user: str, exec_path: str, env_file: str, connectivity_mode: str, sql_type: str | None = None) -> str:
+	after_units = ["network-online.target"]
+	if connectivity_mode == "direct":
+		after_units.append("postgresql.service" if sql_type == "postgres" else "mariadb.service")
+		after_units.append("redis-server.service")
+
 	return f"""[Unit]
 Description=BTU Scheduler daemon
-After=network-online.target mariadb.service redis-server.service
+After={" ".join(after_units)}
 Wants=network-online.target
 
 [Service]

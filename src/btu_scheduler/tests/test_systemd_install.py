@@ -132,6 +132,22 @@ class TestRenderEnvFile(unittest.TestCase):
 		self.assertNotIn("RQ_PASSWORD", rendered)
 		self.assertNotIn("WEBSERVER_HOST_HEADER", rendered)
 
+	def test_password_with_embedded_quote_is_quoted_and_escaped(self):
+		env = dict(DIRECT_ENV)
+		env["BTU_SCHEDULER_SQL_PASSWORD"] = 'pass"word'
+		values = collect_settings("direct", env=env, non_interactive=True, prompter=_no_prompt)
+		settings = validate_settings(values)
+		rendered = render_env_file(settings)
+		self.assertIn('BTU_SCHEDULER_SQL_PASSWORD="pass\\"word"', rendered)
+
+	def test_password_with_leading_whitespace_is_quoted(self):
+		env = dict(DIRECT_ENV)
+		env["BTU_SCHEDULER_SQL_PASSWORD"] = " leadingspace"
+		values = collect_settings("direct", env=env, non_interactive=True, prompter=_no_prompt)
+		settings = validate_settings(values)
+		rendered = render_env_file(settings)
+		self.assertIn('BTU_SCHEDULER_SQL_PASSWORD=" leadingspace"', rendered)
+
 
 class TestFindBtuExecutable(unittest.TestCase):
 	"""
@@ -142,11 +158,14 @@ class TestFindBtuExecutable(unittest.TestCase):
 	"""
 
 	def test_prefers_argv0_when_it_is_a_real_file(self):
+		import pathlib
 		import sys
 		from unittest.mock import patch
 
+		# find_btu_executable() returns a .resolve()'d path, which can differ from the raw
+		# __file__ string if any ancestor directory is a symlink — compare resolved to resolved.
 		with patch.object(sys, "argv", [__file__]):
-			self.assertEqual(find_btu_executable(), __file__)
+			self.assertEqual(find_btu_executable(), str(pathlib.Path(__file__).resolve()))
 
 	def test_falls_back_to_which_when_argv0_is_not_a_file(self):
 		import sys
@@ -170,6 +189,7 @@ class TestRenderUnitFile(unittest.TestCase):
 			service_user="btu-scheduler",
 			exec_path="/opt/btu-scheduler/.venv/bin/btu",
 			env_file="/etc/btu-scheduler/btu-scheduler.env",
+			connectivity_mode="direct",
 		)
 		self.assertIn("ExecStart=/opt/btu-scheduler/.venv/bin/btu run-daemon", rendered)
 
@@ -178,10 +198,39 @@ class TestRenderUnitFile(unittest.TestCase):
 			service_user="btu-scheduler",
 			exec_path="/usr/local/bin/btu",
 			env_file="/etc/btu-scheduler/btu-scheduler.env",
+			connectivity_mode="direct",
 		)
 		self.assertIn("EnvironmentFile=/etc/btu-scheduler/btu-scheduler.env", rendered)
 
 	def test_user_and_group_match_service_user(self):
-		rendered = render_unit_file(service_user="custom-user", exec_path="/usr/local/bin/btu", env_file="/etc/x.env")
+		rendered = render_unit_file(
+			service_user="custom-user", exec_path="/usr/local/bin/btu", env_file="/etc/x.env", connectivity_mode="direct"
+		)
 		self.assertIn("User=custom-user", rendered)
 		self.assertIn("Group=custom-user", rendered)
+
+	def test_direct_mode_depends_on_mariadb_and_redis_by_default(self):
+		rendered = render_unit_file(
+			service_user="btu-scheduler", exec_path="/usr/local/bin/btu", env_file="/etc/x.env", connectivity_mode="direct"
+		)
+		self.assertIn("mariadb.service", rendered)
+		self.assertIn("redis-server.service", rendered)
+
+	def test_direct_mode_depends_on_postgresql_when_sql_type_is_postgres(self):
+		rendered = render_unit_file(
+			service_user="btu-scheduler",
+			exec_path="/usr/local/bin/btu",
+			env_file="/etc/x.env",
+			connectivity_mode="direct",
+			sql_type="postgres",
+		)
+		self.assertIn("postgresql.service", rendered)
+		self.assertNotIn("mariadb.service", rendered)
+
+	def test_webserver_mode_does_not_depend_on_mariadb_or_redis(self):
+		rendered = render_unit_file(
+			service_user="btu-scheduler", exec_path="/usr/local/bin/btu", env_file="/etc/x.env", connectivity_mode="webserver"
+		)
+		self.assertNotIn("mariadb.service", rendered)
+		self.assertNotIn("postgresql.service", rendered)
+		self.assertNotIn("redis-server.service", rendered)

@@ -173,8 +173,8 @@ def cli_list_scheduled_tasks():
 )
 @click.option(
 	"--unit-file",
-	default="/etc/systemd/system/btu-scheduler.service",
-	show_default=True,
+	default=None,
+	help="Path to write the systemd unit file. Defaults to /etc/systemd/system/<service-name>.service.",
 )
 @click.option("--service-name", default="btu-scheduler", show_default=True)
 @click.option(
@@ -224,6 +224,11 @@ def cli_install_systemd(
 			"the generated files without needing root."
 		)
 
+	if unit_file is None:
+		# Keep the unit file's path in sync with --service-name by default, so that
+		# `systemctl enable --now <service-name>` below finds the file this command just wrote.
+		unit_file = f"/etc/systemd/system/{service_name}.service"
+
 	env_path = pathlib.Path(env_file)
 	unit_path = pathlib.Path(unit_file)
 
@@ -233,7 +238,9 @@ def cli_install_systemd(
 				raise click.ClickException(f"Aborted: {path} already exists. Pass --force to overwrite without asking.")
 
 	def prompter(prompt_text: str, default: str | None, is_secret: bool) -> str:
-		reply = click.prompt(prompt_text, default=default or "", hide_input=is_secret, show_default=bool(default))
+		# default=None (no default available) makes click.prompt keep re-asking until the
+		# user types something non-blank, instead of silently accepting an empty Enter-press.
+		reply = click.prompt(prompt_text, default=default, hide_input=is_secret, show_default=bool(default))
 		return reply
 
 	try:
@@ -242,7 +249,13 @@ def cli_install_systemd(
 		)
 		settings = si.validate_settings(raw_values)
 		exec_path = si.find_btu_executable()
-		unit_content = si.render_unit_file(service_user=service_user, exec_path=exec_path, env_file=str(env_path))
+		unit_content = si.render_unit_file(
+			service_user=service_user,
+			exec_path=exec_path,
+			env_file=str(env_path),
+			connectivity_mode=settings.connectivity_mode,
+			sql_type=settings.sql_type,
+		)
 		env_content = si.render_env_file(settings)
 
 		if dry_run:
@@ -284,6 +297,11 @@ def cli_install_systemd(
 
 	except si.InstallError as ex:
 		raise click.ClickException(str(ex)) from ex
+	except subprocess.CalledProcessError as ex:
+		raise click.ClickException(
+			f"Command {ex.cmd} failed with exit code {ex.returncode}. The env/unit files above may "
+			"already have been written to disk even though enabling the service failed."
+		) from ex
 
 
 @entry_point.command("run-daemon")
