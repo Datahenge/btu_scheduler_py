@@ -21,9 +21,12 @@ This is the Python-based alternative to the original 2021 scheduler: https://git
 - Download the btu-scheduler app:  `git clone https://github.com/Datahenge/btu_scheduler_py.git`
 - Install with pip:
   ```bash
+  # connectivity_mode = "direct" (the default) needs the SQL drivers:
+  pip install -e ".[direct]"
+  # connectivity_mode = "webserver" needs no SQL drivers:
   pip install -e .
-  # or with development dependencies like linters
-  pip install -e ".[development]"
+  # add development dependencies like linters:
+  pip install -e ".[direct,development]"
   ```
 - Create a configuration file at `~/.config/btu-scheduler/.env` (or set `XDG_CONFIG_HOME` and use `$XDG_CONFIG_HOME/btu-scheduler/.env`):
   ```bash

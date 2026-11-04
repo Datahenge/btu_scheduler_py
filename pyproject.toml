@@ -28,7 +28,7 @@ classifiers = [
 dependencies = [
     "click ~= 8.1.7",
 	"croniter>=6.1.0",
-	"databases[asyncpg,asyncmy]>=0.9.0",  # Multi-database support: asyncpg for PostgreSQL, asyncmy for MariaDB/MySQL
+	"databases>=0.9.0",  # SQL drivers live in the 'direct' extra; webserver mode needs none
 	"redis==5.2.1",
 	"requests==2.33.0",
  	"rq==1.15.1",  # Keeping this pinned to Frappe Framework v15 version of rq
@@ -40,6 +40,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Required for connectivity_mode = "direct" (the default). Not needed for "webserver".
+direct = [
+	"asyncpg",  # PostgreSQL
+	"asyncmy>=0.2.12",  # MariaDB/MySQL; >=0.2.12 for CVE-2025-65896 (SQL injection via dict keys)
+]
 development = ["twine", "pytest", "ruff>=0.14.0", "ventwig"]
 
 [project.scripts]

@@ -23,7 +23,10 @@ WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
 
-RUN uv sync --frozen --no-cache
+# SQL drivers (asyncpg, asyncmy) are only needed in direct mode. For a webserver-only image:
+#   docker build --build-arg UV_SYNC_EXTRAS="" .
+ARG UV_SYNC_EXTRAS="--extra direct"
+RUN uv sync --frozen --no-cache ${UV_SYNC_EXTRAS}
 
 # ---- Runtime stage ----
 FROM python:3.12-slim AS runtime

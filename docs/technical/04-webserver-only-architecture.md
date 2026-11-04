@@ -211,6 +211,10 @@ Both tiers from the recommendation above are now implemented:
   `webserver` mode, polling the new pending-commands endpoint on the existing polling cadence.
 - `Dockerfile`, `.dockerignore`, and `docker/compose.btu-scheduler.snippet.yml` +
   `docker/btu-scheduler.env.example` for the Compose co-location tier.
+- SQL drivers (`asyncpg`, `asyncmy`) moved to the `direct` optional extra, so a `webserver`-mode
+  install carries no database drivers. The Dockerfile installs the extra by default
+  (`UV_SYNC_EXTRAS="--extra direct"`); pass `--build-arg UV_SYNC_EXTRAS=""` for a webserver-only
+  image. `lib/sql.get_database()` raises a clear error if a driver is missing in `direct` mode.
 
 **BTU Frappe app** (`apps/btu`, already on `version-16`):
 - New whitelisted endpoints in `btu_api/endpoints.py`: `get_enabled_task_schedules`,

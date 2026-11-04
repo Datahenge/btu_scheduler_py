@@ -44,8 +44,15 @@ async def get_database() -> Database:
 	if _database_instance is None:
 		config = load_config()
 		connection_string = config.get_sql_connection_string()
-		_database_instance = Database(connection_string)
-		await _database_instance.connect()
+		try:
+			database = Database(connection_string)  # Imports the asyncpg/asyncmy driver here.
+		except ModuleNotFoundError as ex:
+			raise RuntimeError(
+				f"SQL driver '{ex.name}' is not installed. connectivity_mode='direct' requires the "
+				"'direct' extra: pip install 'btu-scheduler[direct]' (or uv sync --extra direct)."
+			) from ex
+		await database.connect()
+		_database_instance = database
 
 	return _database_instance
 
