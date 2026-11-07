@@ -26,7 +26,9 @@ COPY src ./src
 # SQL drivers (asyncpg, asyncmy) are only needed in direct mode. For a webserver-only image:
 #   docker build --build-arg UV_SYNC_EXTRAS="" .
 ARG UV_SYNC_EXTRAS="--extra direct"
-RUN uv sync --frozen --no-cache ${UV_SYNC_EXTRAS}
+# --no-editable installs the package itself into .venv; the runtime stage copies only .venv, so an
+# editable install (a link back to /app/src) fails with "No module named 'btu_scheduler'".
+RUN uv sync --frozen --no-cache --no-editable ${UV_SYNC_EXTRAS}
 
 # ---- Runtime stage ----
 FROM python:3.12-slim AS runtime
