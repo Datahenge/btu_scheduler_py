@@ -270,7 +270,8 @@ def rq_print_scheduled_tasks():
 	tasks: list[RQScheduledTask] = rq_get_scheduled_tasks()
 	for result in sorted(tasks, key=lambda x: x.task_schedule_id):
 		message: str = f"Task Schedule {result.task_schedule_id} is scheduled to occur later at {result.next_execution_as_datetime_utc}"
-		log.info(message)
+		# DEBUG: this runs every full refill (30 s by default), so at INFO it filled the log without news.
+		log.debug(message)
 
 
 def clear_all_scheduled_tasks() -> bool:
