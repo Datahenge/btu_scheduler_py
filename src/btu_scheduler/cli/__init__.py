@@ -311,7 +311,17 @@ def cli_run_daemon():
 	"""
 	from btu_scheduler.daemon import main
 
-	asyncio.run(main())
+	try:
+		asyncio.run(main())
+	except Exception:
+		# Exit hard: a leftover worker thread kept the process alive after a fatal error (Staging,
+		# 2026-11-07), so neither Docker nor systemd restarted the hung daemon.
+		import structlog
+
+		structlog.get_logger(__name__).exception(
+			"BTU Scheduler daemon stopped on an unhandled error; exiting so the supervisor restarts it."
+		)
+		os._exit(1)
 
 
 @entry_point.command("test")

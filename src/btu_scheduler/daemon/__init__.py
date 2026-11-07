@@ -40,7 +40,7 @@ async def main():
 			diagnose_redis()  # Synchronous function.
 		except Exception as ex:
 			log.error(f"Unable to connect to Frappe Redis queue: {ex}")
-			return
+			raise SystemExit(1) from ex  # non-zero, so a supervisor restarts the daemon
 		await diagnose_sql(quiet=True)
 		command_listener = redis_command_listener
 	else:
@@ -49,7 +49,7 @@ async def main():
 			diagnose_frappe_ping()
 		except Exception as ex:
 			log.error(f"Unable to reach Frappe web server: {ex}")
-			return
+			raise SystemExit(1) from ex  # non-zero, so a supervisor restarts the daemon
 		command_listener = webserver_command_poller
 
 	internal_queue = asyncio.Queue()

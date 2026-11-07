@@ -2,6 +2,8 @@
 
 import asyncio
 import json
+import os
+from pathlib import Path
 
 import structlog
 
@@ -16,26 +18,40 @@ log = structlog.get_logger(__name__)
 # Must match REDIS_COMMAND_QUEUE in btu/btu_api/scheduler.py.
 REDIS_COMMAND_QUEUE = "btu:scheduler:commands"
 
+# Touched after every pass of review_next_execution_times(); the Docker HEALTHCHECK reads its age.
+HEARTBEAT_FILE = Path(os.environ.get("BTU_SCHEDULER_HEARTBEAT_FILE", "/tmp/btu_scheduler_heartbeat"))
+
+
+def _touch_heartbeat() -> None:
+	try:
+		HEARTBEAT_FILE.touch()
+	except OSError as ex:
+		log.warning(f"Unable to touch heartbeat file {HEARTBEAT_FILE}: {ex}")
+
 
 async def internal_queue_consumer(shared_queue: asyncio.Queue[str]) -> None:
 	"""
 	Reads TSIKs from the internal coroutine Queue, and adds them to Python RQ.
 	"""
 	while True:
-		if shared_queue.qsize():
-			next_task_schedule_id = (
-				await shared_queue.get()
-			)  # NOTE: The coroutine will hang out here, doing nothing, until something shows up in the Queue.
-			task_schedule: BtuTaskSchedule = await BtuTaskSchedule.init_from_schedule_key(next_task_schedule_id)
-			if task_schedule:
-				scheduler.add_task_schedule_to_rq(task_schedule)
-				log.debug(
-					f"IQM: Added task schedule to Redis Key 'btu_scheduler:task_execution_times'.  Size of internal queue is now {shared_queue.qsize()}"
-				)
-			else:
-				log.error(
-					f"IQM: Unable to construct a BtuTaskSchedule object from Task Schedule ID = {next_task_schedule_id}"
-				)
+		# One failed Task Schedule (for example while the web server restarts) must not stop the consumer.
+		try:
+			if shared_queue.qsize():
+				next_task_schedule_id = (
+					await shared_queue.get()
+				)  # NOTE: The coroutine will hang out here, doing nothing, until something shows up in the Queue.
+				task_schedule: BtuTaskSchedule = await BtuTaskSchedule.init_from_schedule_key(next_task_schedule_id)
+				if task_schedule:
+					scheduler.add_task_schedule_to_rq(task_schedule)
+					log.debug(
+						f"IQM: Added task schedule to Redis Key 'btu_scheduler:task_execution_times'.  Size of internal queue is now {shared_queue.qsize()}"
+					)
+				else:
+					log.error(
+						f"IQM: Unable to construct a BtuTaskSchedule object from Task Schedule ID = {next_task_schedule_id}"
+					)
+		except Exception as ex:
+			log.error(f"Internal queue consumer error; continuing: {ex}")
 
 		await asyncio.sleep(1)  # blocking request for just a moment
 
@@ -59,10 +75,14 @@ async def internal_queue_producer(shared_queue: asyncio.Queue[str]) -> None:
 			log.debug(
 				f"Producer: {elapsed_seconds} seconds have elapsed.  Time for a full-write of Task Schedule Keys in Redis!"
 			)
-			result = await scheduler.queue_full_refill(shared_queue, check_rq=True)
-			if result:
-				log.debug(f"  * Internal queue contains a total of {shared_queue.qsize()} values.")
-				scheduler.rq_print_scheduled_tasks()  # log the Task Schedule:
+			# A failed refill (for example while the web server restarts) is retried at the next interval.
+			try:
+				result = await scheduler.queue_full_refill(shared_queue, check_rq=True)
+				if result:
+					log.debug(f"  * Internal queue contains a total of {shared_queue.qsize()} values.")
+					scheduler.rq_print_scheduled_tasks()  # log the Task Schedule:
+			except Exception as ex:
+				log.error(f"Full refill of Task Schedules failed; retrying at the next interval: {ex}")
 			stopwatch.reset()  # reset the stopwatch and begin a new countdown
 
 		await asyncio.sleep(1)  # blocking request, yields controls to another coroutine for a while.
@@ -85,12 +105,16 @@ async def review_next_execution_times(shared_queue: asyncio.Queue[str]) -> None:
 		log.debug("Thread 3: Attempting to add new Jobs to RQ...")
 		# This thread requires a lock on the Internal Queue, so that after a Task runs, it can be rescheduled.
 		stopwatch = Stopwatch()
-		await scheduler.check_and_run_eligible_task_schedules(shared_queue)
+		try:
+			await scheduler.check_and_run_eligible_task_schedules(shared_queue)
+		except Exception as ex:
+			log.error(f"Review of next execution times failed; retrying at the next interval: {ex}")
+		_touch_heartbeat()
 		elapsed_seconds = stopwatch.get_elapsed_seconds_total()  # time just spent working on RQ database.
 		# I want this thread to execute at roughly the same interval.
 		# By subtracting the Time Elapsed above, from the desired Wait Time, we know how much longer the thread should sleep.
 		await asyncio.sleep(
-			load_config().scheduler_polling_interval - elapsed_seconds
+			max(0, load_config().scheduler_polling_interval - elapsed_seconds)
 		)  # wait N seconds before trying again.
 
 

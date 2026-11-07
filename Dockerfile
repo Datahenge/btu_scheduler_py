@@ -43,5 +43,10 @@ ENV PATH="/app/.venv/bin:${PATH}" \
 
 USER btu
 
+# Healthy while review_next_execution_times() keeps touching its heartbeat file (every polling
+# interval, 30 s by default). Docker Compose shows the state; it does not restart on "unhealthy".
+HEALTHCHECK --interval=60s --timeout=5s --start-period=60s --retries=3 \
+    CMD python -c "import os, sys, time; p = os.environ.get('BTU_SCHEDULER_HEARTBEAT_FILE', '/tmp/btu_scheduler_heartbeat'); sys.exit(0 if os.path.exists(p) and time.time() - os.path.getmtime(p) < 180 else 1)"
+
 ENTRYPOINT ["btu"]
 CMD ["run-daemon"]
