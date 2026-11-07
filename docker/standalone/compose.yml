@@ -1,0 +1,44 @@
+# BTU Scheduler as its own Docker Compose project, next to an existing ERPNext stack.
+#
+# Pattern: webserver connectivity mode over the ERPNext stack's private Docker network.
+#   - No SQL or Redis access: the daemon talks only to the Frappe web server.
+#   - No public internet: it joins the ERPNext stack's network as an external network and calls
+#     the Frappe web server by its service name over plain HTTP, sending the site's Host header.
+#   - Its own lifecycle: start, stop and rebuild it without touching the ERPNext stack.
+#
+# Before `docker compose up -d --build`:
+#   1. `docker network ls` and set `networks.erpnext.name` below to the ERPNext stack's network.
+#   2. Copy scheduler.settings.env.example to scheduler.settings.env and set the web server
+#      service name, port and site name.
+#   3. Copy scheduler.secret.env.example to scheduler.secret.env (chmod 600) and put the
+#      scheduler API user's token in it.
+#   4. On the Frappe site: bench --site <site> set-config btu_scheduler_connectivity_mode webserver
+#
+# The image is built from this repository. Point build.context at a checkout or an extracted
+# `git archive` of a known commit (recommended, so the running code is pinned).
+name: btu-scheduler
+
+services:
+  btu-scheduler:
+    build:
+      context: ./src          # a checkout or `git archive` of btu_scheduler_py
+      args:
+        UV_SYNC_EXTRAS: ""    # webserver mode needs no SQL drivers
+    image: btu-scheduler:local
+    container_name: btu-scheduler
+    restart: unless-stopped   # the daemon exits non-zero on a fatal error; Docker restarts it
+    env_file:
+      - ./scheduler.settings.env   # non-secret settings
+      - ./scheduler.secret.env     # BTU_SCHEDULER_WEBSERVER_TOKEN only; chmod 600, never commit
+    networks:
+      - erpnext
+    logging:                  # the daemon logs to stdout only; cap Docker's log file
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  erpnext:
+    external: true
+    name: erpnext_default     # the ERPNext stack's network, from `docker network ls`

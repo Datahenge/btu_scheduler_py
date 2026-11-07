@@ -19,6 +19,9 @@
 #                different host, or a managed/hosted ERPNext. No SQL/Redis needed.
 #
 # See docs/technical/04-webserver-only-architecture.md for the full write-up.
+#
+# To run the scheduler as its own Compose project instead (webserver mode over the ERPNext
+# stack's private network, with its own lifecycle), see docker/standalone/.
 
 services:
 

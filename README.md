@@ -36,7 +36,7 @@ This is the Python-based alternative to the original 2021 scheduler: https://git
   nano ~/.config/btu-scheduler/.env
   ```
 
-Alternatively, pass all settings as process environment variables (e.g. in Docker, Kubernetes, or systemd). See [docs/requirements/01-environment-variables.md](docs/requirements/01-environment-variables.md) for loading precedence and [docs/requirements/02-system-prerequisites.md](docs/requirements/02-system-prerequisites.md) for service version requirements.
+Alternatively, pass all settings as process environment variables (e.g. in Docker, Kubernetes, or systemd). For a containerized ERPNext stack, [docker/standalone/](docker/standalone/README.md) is a working Docker Compose example: webserver mode over the stack's private network, as a separate Compose project. See [docs/requirements/01-environment-variables.md](docs/requirements/01-environment-variables.md) for loading precedence and [docs/requirements/02-system-prerequisites.md](docs/requirements/02-system-prerequisites.md) for service version requirements.
 
 ### Configuration variables
 
