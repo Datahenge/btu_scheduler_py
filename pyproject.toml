@@ -13,7 +13,7 @@ include = [ "btu_scheduler*" ]
 
 [project]
 name = "btu-scheduler"
-version = "1.0.0"
+version = "1.1.0"
 description = "A BTU scheduler tool written in Python."
 readme = "README.md"
 authors = [
@@ -26,17 +26,17 @@ classifiers = [
 ]
 
 dependencies = [
-    "click ~= 8.1.7",
+	"click ~= 8.1.7",
 	"croniter>=6.1.0",
 	"databases>=0.9.0",  # SQL drivers live in the 'direct' extra; webserver mode needs none
 	"redis==5.2.1",
 	"requests==2.33.0",
- 	"rq==1.15.1",  # Keeping this pinned to Frappe Framework v15 version of rq
+	"rq==2.6.1",  # Match Frappe Framework v16 (frappe pyproject.toml: rq==2.6.1)
 	"pydantic-settings>=2.0.0",
 	"platformdirs>=4.0.0",
 	"python-dotenv>=1.0.0",
- "structlog>=24.0.0",
-    "temporal_lib>=0.1.2",
+	"structlog>=24.0.0",
+	"temporal_lib>=0.1.2",
 ]
 
 [project.optional-dependencies]
@@ -53,6 +53,14 @@ btu = "btu_scheduler.cli:entry_point"
 
 [tool.ruff]
 line-length = 120  # Default is 88
+# Vendored with ventwig and drift-checked against upstream: never edited here.
+extend-exclude = ["src/btu_scheduler/_vendor"]
+
+[tool.ruff.lint.per-file-ignores]
+# Long-running loops and CLI checks catch Exception on purpose: they log the error and keep going.
+"src/btu_scheduler/daemon/*.py" = ["BLE001"]
+"src/btu_scheduler/cli/__init__.py" = ["BLE001"]
+"src/btu_scheduler/lib/scheduler.py" = ["BLE001"]
 
 [tool.ruff.format]
 indent-style = "tab"

@@ -144,7 +144,7 @@ _redis_store: RedisScheduledStore | None = None
 
 def get_scheduled_store() -> ScheduledStore:
 	"""Return the active ScheduledStore for the current connectivity_mode, memoized per mode."""
-	global _in_memory_store, _redis_store  # noqa: PLW0603
+	global _in_memory_store, _redis_store
 
 	if load_config().connectivity_mode == "webserver":
 		if _in_memory_store is None:

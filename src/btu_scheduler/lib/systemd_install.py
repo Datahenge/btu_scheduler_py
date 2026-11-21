@@ -19,11 +19,6 @@ from pydantic import ValidationError
 
 from btu_scheduler.lib.config import SchedulerSettings
 
-DEFAULT_SERVICE_USER = "btu-scheduler"
-DEFAULT_ENV_FILE = "/etc/btu-scheduler/btu-scheduler.env"
-DEFAULT_UNIT_FILE = "/etc/systemd/system/btu-scheduler.service"
-DEFAULT_SERVICE_NAME = "btu-scheduler"
-
 
 @dataclass(frozen=True)
 class FieldSpec:
@@ -138,7 +133,9 @@ def render_env_file(settings: SchedulerSettings) -> str:
 	return "\n".join(lines) + "\n"
 
 
-def render_unit_file(*, service_user: str, exec_path: str, env_file: str, connectivity_mode: str, sql_type: str | None = None) -> str:
+def render_unit_file(
+	*, service_user: str, exec_path: str, env_file: str, connectivity_mode: str, sql_type: str | None = None
+) -> str:
 	after_units = ["network-online.target"]
 	if connectivity_mode == "direct":
 		after_units.append("postgresql.service" if sql_type == "postgres" else "mariadb.service")

@@ -178,9 +178,12 @@ class TestFindBtuExecutable(unittest.TestCase):
 		import sys
 		from unittest.mock import patch
 
-		with patch.object(sys, "argv", ["btu"]), patch("shutil.which", return_value=None):
-			with self.assertRaises(InstallError):
-				find_btu_executable()
+		with (
+			patch.object(sys, "argv", ["btu"]),
+			patch("shutil.which", return_value=None),
+			self.assertRaises(InstallError),
+		):
+			find_btu_executable()
 
 
 class TestRenderUnitFile(unittest.TestCase):
@@ -204,14 +207,20 @@ class TestRenderUnitFile(unittest.TestCase):
 
 	def test_user_and_group_match_service_user(self):
 		rendered = render_unit_file(
-			service_user="custom-user", exec_path="/usr/local/bin/btu", env_file="/etc/x.env", connectivity_mode="direct"
+			service_user="custom-user",
+			exec_path="/usr/local/bin/btu",
+			env_file="/etc/x.env",
+			connectivity_mode="direct",
 		)
 		self.assertIn("User=custom-user", rendered)
 		self.assertIn("Group=custom-user", rendered)
 
 	def test_direct_mode_depends_on_mariadb_and_redis_by_default(self):
 		rendered = render_unit_file(
-			service_user="btu-scheduler", exec_path="/usr/local/bin/btu", env_file="/etc/x.env", connectivity_mode="direct"
+			service_user="btu-scheduler",
+			exec_path="/usr/local/bin/btu",
+			env_file="/etc/x.env",
+			connectivity_mode="direct",
 		)
 		self.assertIn("mariadb.service", rendered)
 		self.assertIn("redis-server.service", rendered)
@@ -229,7 +238,10 @@ class TestRenderUnitFile(unittest.TestCase):
 
 	def test_webserver_mode_does_not_depend_on_mariadb_or_redis(self):
 		rendered = render_unit_file(
-			service_user="btu-scheduler", exec_path="/usr/local/bin/btu", env_file="/etc/x.env", connectivity_mode="webserver"
+			service_user="btu-scheduler",
+			exec_path="/usr/local/bin/btu",
+			env_file="/etc/x.env",
+			connectivity_mode="webserver",
 		)
 		self.assertNotIn("mariadb.service", rendered)
 		self.assertNotIn("postgresql.service", rendered)

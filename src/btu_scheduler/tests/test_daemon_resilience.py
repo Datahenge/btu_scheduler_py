@@ -23,9 +23,9 @@ def test_producer_logs_a_failed_refill_and_keeps_running():
 		patch.object(coroutines.scheduler, "queue_full_refill", AsyncMock(side_effect=ConnectionError("refused"))),
 		patch.object(coroutines.asyncio, "sleep", AsyncMock(side_effect=_StopLoop)),
 		patch.object(coroutines, "log") as log,
+		pytest.raises(_StopLoop),
 	):
-		with pytest.raises(_StopLoop):
-			asyncio.run(coroutines.internal_queue_producer(asyncio.Queue()))
+		asyncio.run(coroutines.internal_queue_producer(asyncio.Queue()))
 	log.error.assert_called_once()
 
 
@@ -42,8 +42,8 @@ def test_review_logs_a_failed_pass_and_still_writes_the_heartbeat(tmp_path):
 		patch.object(coroutines.asyncio, "sleep", sleeps),
 		patch.object(coroutines, "HEARTBEAT_FILE", heartbeat),
 		patch.object(coroutines, "log") as log,
+		pytest.raises(_StopLoop),
 	):
-		with pytest.raises(_StopLoop):
-			asyncio.run(coroutines.review_next_execution_times(asyncio.Queue()))
+		asyncio.run(coroutines.review_next_execution_times(asyncio.Queue()))
 	log.error.assert_called_once()
 	assert heartbeat.exists()

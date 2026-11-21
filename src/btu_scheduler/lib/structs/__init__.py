@@ -10,7 +10,6 @@ import structlog
 from btu_scheduler.lib import btu_cron
 from btu_scheduler.lib.config import load_config
 from btu_scheduler.lib.data_access import get_task_schedule_by_id
-from btu_scheduler.lib.sql import get_task_by_id
 from btu_scheduler.lib.utils import build_frappe_headers, get_frappe_base_url
 
 log = structlog.get_logger(__name__)
@@ -24,21 +23,6 @@ class BtuTask:
 	arguments: str | None
 	path_to_function: str  # example:  btu.manual_tests.ping_with_wait
 	max_task_duration: int  # example:  600 seconds
-
-	@staticmethod
-	async def init_from_task_key(task_key: str) -> "BtuTask":
-		task_data: dict = await get_task_by_id(task_key)  # read from the SQL Database
-		if not task_data:
-			raise IOError(f"No SQL row returned by get_task_by_id() for primary key = '{task_key}'")
-
-		return BtuTask(
-			task_key=task_data["task_key"],
-			desc_short=task_data["desc_short"],
-			desc_long=task_data["desc_long"],
-			arguments=task_data["arguments"],
-			path_to_function=task_data["path_to_function"],
-			max_task_duration=task_data["max_task_duration"],
-		)
 
 
 @dataclass
@@ -57,7 +41,7 @@ class BtuTaskSchedule:
 	async def init_from_schedule_key(schedule_key: str) -> "BtuTaskSchedule":
 		schedule_data: dict = await get_task_schedule_by_id(schedule_key)  # read from the SQL Database
 		if not schedule_data:
-			raise IOError(f"No SQL row returned by get_task_schedule_by_id() for primary key = '{schedule_key}'")
+			raise OSError(f"No SQL row returned by get_task_schedule_by_id() for primary key = '{schedule_key}'")
 
 		return BtuTaskSchedule(
 			id=schedule_data["name"],
@@ -91,4 +75,4 @@ class BtuTaskSchedule:
 		if response.status_code == 200:
 			log.info(f"Successfully enqueued Task Schedule: '{self.id}'")
 		else:
-			raise IOError(f"Unexpected response code from Frappe Framework web server: {response.json()}")
+			raise OSError(f"Unexpected response code from Frappe Framework web server: {response.json()}")

@@ -16,9 +16,9 @@ def _mock_config(token="Token abc123", host_header=None):
 
 
 class TestBuildFrappeHeaders(unittest.TestCase):
-
 	def setUp(self):
 		from btu_scheduler.lib.utils import build_frappe_headers
+
 		self.build = build_frappe_headers
 
 	def test_returns_dict(self):

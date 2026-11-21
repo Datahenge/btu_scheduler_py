@@ -30,13 +30,7 @@ class CronStruct:
 		def value_or_wildcard(value):
 			return value if value else "*"
 
-		return "{} {} {} {} {}".format(
-			value_or_wildcard(self.minute),
-			value_or_wildcard(self.hour),
-			value_or_wildcard(self.day_of_month),
-			value_or_wildcard(self.month),
-			value_or_wildcard(self.day_of_week),
-		)
+		return f"{value_or_wildcard(self.minute)} {value_or_wildcard(self.hour)} {value_or_wildcard(self.day_of_month)} {value_or_wildcard(self.month)} {value_or_wildcard(self.day_of_week)}"
 
 	@staticmethod
 	def from_string(cron_string: str) -> "CronStruct":

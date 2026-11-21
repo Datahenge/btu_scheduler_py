@@ -7,8 +7,8 @@ directly, these call whitelisted methods on the BTU Frappe app.
 See docs/technical/04-webserver-only-architecture.md for why this mode exists.
 """
 
-import structlog
 import requests
+import structlog
 
 from btu_scheduler.lib.config import load_config
 from btu_scheduler.lib.utils import build_frappe_headers, get_frappe_base_url
@@ -24,7 +24,7 @@ def get_enabled_task_schedules() -> list[dict]:
 
 	response = requests.get(url=url, headers=headers, timeout=30)
 	if response.status_code != 200:
-		raise IOError(
+		raise OSError(
 			f"Unexpected response from Frappe while listing Task Schedules: {response.status_code} {response.text}"
 		)
 	return response.json()["message"]
@@ -40,7 +40,7 @@ def get_task_schedule_by_id(task_schedule_id: str) -> dict | None:
 	if response.status_code == 404:
 		return None
 	if response.status_code != 200:
-		raise IOError(
+		raise OSError(
 			f"Unexpected response from Frappe while reading Task Schedule '{task_schedule_id}': "
 			f"{response.status_code} {response.text}"
 		)

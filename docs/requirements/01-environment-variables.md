@@ -30,8 +30,7 @@ bootstrap uppercases the app name and converts hyphens to underscores.
 ## Loading
 
 The settings are read when `load_config()` runs. BTU Scheduler caches that
-validated settings object for normal runtime access. Tests and explicit reload
-paths can call `reload_config()` to clear the cache and read again.
+validated settings object for normal runtime access.
 
 ## Precedence
 

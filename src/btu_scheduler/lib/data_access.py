@@ -8,8 +8,7 @@ to know which connectivity_mode is active.
 
 import asyncio
 
-from btu_scheduler.lib import frappe_api
-from btu_scheduler.lib import sql
+from btu_scheduler.lib import frappe_api, sql
 from btu_scheduler.lib.config import load_config
 
 

@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 
 from btu_scheduler.lib.btu_cron import tz_cron_to_utc_datetimes
 
-UTC     = ZoneInfo("UTC")
+UTC = ZoneInfo("UTC")
 EASTERN = ZoneInfo("America/New_York")
 PACIFIC = ZoneInfo("America/Los_Angeles")
 
@@ -57,7 +57,7 @@ class TestNormalUTCConversion(unittest.TestCase):
 
 	def test_timezone_as_string_matches_zoneinfo_object(self):
 		start = datetime(2026, 1, 15, 13, 1, 0, tzinfo=UTC)
-		by_string  = _run("0 18 * * *", "America/New_York", start)[0]
+		by_string = _run("0 18 * * *", "America/New_York", start)[0]
 		by_zoneinfo = _run("0 18 * * *", EASTERN, start)[0]
 		self.assertEqual(by_string, by_zoneinfo)
 
@@ -80,12 +80,12 @@ class TestDSTCoreInvariant(unittest.TestCase):
 		start = datetime(2026, 6, 1, 10, 0, 0, tzinfo=UTC)
 		results = _run("0 18 * * *", EASTERN, start, 3)
 		for r in results:
-			self.assertEqual(r.utcoffset(), timedelta(0),
-				msg=f"Result {r} has non-zero UTC offset; expected UTC-aware datetime")
+			self.assertEqual(
+				r.utcoffset(), timedelta(0), msg=f"Result {r} has non-zero UTC offset; expected UTC-aware datetime"
+			)
 
 
 class TestMultipleResults(unittest.TestCase):
-
 	def test_daily_cron_returns_consecutive_days(self):
 		start = datetime(2026, 6, 1, 10, 0, 0, tzinfo=UTC)
 		results = _run("0 18 * * *", EASTERN, start, 3)
@@ -126,8 +126,11 @@ class TestDSTSpringForward(unittest.TestCase):
 		result = _run("30 2 * * *", EASTERN, start)[0]
 		local_result = result.astimezone(EASTERN)
 
-		self.assertEqual(local_result.date(), datetime(2026, 3, 8).date(),
-			msg="Fires on the same day at the transition point, not 24 hours later")
+		self.assertEqual(
+			local_result.date(),
+			datetime(2026, 3, 8).date(),
+			msg="Fires on the same day at the transition point, not 24 hours later",
+		)
 		self.assertEqual(local_result.hour, 3)
 		self.assertEqual(local_result.minute, 0)
 
@@ -137,8 +140,11 @@ class TestDSTSpringForward(unittest.TestCase):
 		result = _run("30 2 * * *", EASTERN, start)[0]
 		local_result = result.astimezone(EASTERN)
 
-		self.assertEqual(local_result.utcoffset(), timedelta(hours=-4),
-			msg="Result at spring-forward transition should use EDT offset (UTC-4)")
+		self.assertEqual(
+			local_result.utcoffset(),
+			timedelta(hours=-4),
+			msg="Result at spring-forward transition should use EDT offset (UTC-4)",
+		)
 		# 3:00 AM EDT = 07:00 UTC
 		self.assertEqual(result.hour, 7)
 		self.assertEqual(result.minute, 0)
@@ -171,8 +177,11 @@ class TestDSTFallBack(unittest.TestCase):
 		r1_local = results[1].astimezone(EASTERN)
 
 		# The two results must fall on different local calendar days
-		self.assertNotEqual(r0_local.date(), r1_local.date(),
-			msg="Daily cron must not fire twice on the same local calendar day (fall-back fold)")
+		self.assertNotEqual(
+			r0_local.date(),
+			r1_local.date(),
+			msg="Daily cron must not fire twice on the same local calendar day (fall-back fold)",
+		)
 
 
 if __name__ == "__main__":

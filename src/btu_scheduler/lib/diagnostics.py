@@ -82,7 +82,7 @@ def diagnose_frappe_ping(debug_mode=False):
 	print(f"Response Status Code: {response.status_code}")
 	print(f"Response JSON: {response.json()}")
 	if response.status_code != 200:
-		raise IOError(f"Unexpected status code from Frappe web server: {response.status_code}")
+		raise OSError(f"Unexpected status code from Frappe web server: {response.status_code}")
 
 
 def diagnose_pickler(debug_mode: bool = True):
@@ -103,7 +103,7 @@ def diagnose_pickler(debug_mode: bool = True):
 
 	response = requests.get(url=url, headers=headers, timeout=30)
 	if response.status_code != 200:
-		raise IOError(f"Unexpected status code from Frappe: {response.status_code}")
+		raise OSError(f"Unexpected status code from Frappe: {response.status_code}")
 
 	payload = json.loads(response.content.decode("utf-8"))
 	pickled_bytes = bytes(payload["message"])

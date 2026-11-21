@@ -16,30 +16,30 @@ EASTERN = ZoneInfo("America/New_York")
 
 
 def _task(**overrides) -> BtuTask:
-	defaults = dict(
-		task_key="TASK-001",
-		desc_short="Short description",
-		desc_long="A longer description for testing purposes",
-		arguments=None,
-		path_to_function="btu.manual_tests.ping_now",
-		max_task_duration=60,
-	)
+	defaults = {
+		"task_key": "TASK-001",
+		"desc_short": "Short description",
+		"desc_long": "A longer description for testing purposes",
+		"arguments": None,
+		"path_to_function": "btu.manual_tests.ping_now",
+		"max_task_duration": 60,
+	}
 	defaults.update(overrides)
 	return BtuTask(**defaults)
 
 
 def _schedule(**overrides) -> BtuTaskSchedule:
-	defaults = dict(
-		id="TS-000001",
-		task_key="TASK-001",
-		task_description="Test Task",
-		enabled=True,
-		queue_name="default",
-		argument_overrides=None,
-		schedule_description="Every midnight UTC",
-		cron_string="0 0 * * *",
-		cron_timezone=UTC,
-	)
+	defaults = {
+		"id": "TS-000001",
+		"task_key": "TASK-001",
+		"task_description": "Test Task",
+		"enabled": True,
+		"queue_name": "default",
+		"argument_overrides": None,
+		"schedule_description": "Every midnight UTC",
+		"cron_string": "0 0 * * *",
+		"cron_timezone": UTC,
+	}
 	defaults.update(overrides)
 	return BtuTaskSchedule(**defaults)
 

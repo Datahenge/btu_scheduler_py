@@ -152,7 +152,7 @@ wheels = [
 
 [[package]]
 name = "btu-scheduler"
-version = "1.0.0"
+version = "1.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
@@ -193,7 +193,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "redis", specifier = "==5.2.1" },
     { name = "requests", specifier = "==2.33.0" },
-    { name = "rq", specifier = "==1.15.1" },
+    { name = "rq", specifier = "==2.6.1" },
     { name = "ruff", marker = "extra == 'development'", specifier = ">=0.14.0" },
     { name = "structlog", specifier = ">=24.0.0" },
     { name = "temporal-lib", specifier = ">=0.1.2" },
@@ -1009,15 +1009,16 @@ wheels = [
 
 [[package]]
 name = "rq"
-version = "1.15.1"
+version = "2.6.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
+    { name = "croniter" },
     { name = "redis" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/66/64/f66686dea341ce259c717ea4de098c14ecd1a6bd5aec91f6991b3c288a03/rq-1.15.1.tar.gz", hash = "sha256:1f49f4ac1a084044bb8e95b3f305c0bf17e55618b08c18e0b60c080f12d6f008", size = 81462, upload-time = "2023-06-22T02:15:17.982Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/86/6f/a2848f5ba0ca7f1f879c7ad44a2e7b06b98197a7da39be39eda775807f33/rq-2.6.1.tar.gz", hash = "sha256:db5c0d125ac9dbd4438f9a5225ea3e64050542b416fd791d424e2ab5b2853289", size = 675386, upload-time = "2025-11-22T06:45:16.673Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e1/24/5ae8bfcea4f24b32e079da421015ad380eadfc8250892a2470b6f19df0d8/rq-1.15.1-py2.py3-none-any.whl", hash = "sha256:6e243d8d9c4af4686ded4b01b25ea1ff4bac4fc260b02638fbe9c8c17b004bd1", size = 95780, upload-time = "2023-06-22T02:15:15.853Z" },
+    { url = "https://files.pythonhosted.org/packages/4b/cc/919ccbf0c9b4f8b0f68c3f53e6d8e1e94af4d74cee4e6d3cb2e81f7d0da9/rq-2.6.1-py3-none-any.whl", hash = "sha256:5cc88d3bb5263a407fb2ba2dc6fe8dc710dae94b6f74396cdfe1b32beded9408", size = 112578, upload-time = "2025-11-22T06:45:13.529Z" },
 ]
 
 [[package]]

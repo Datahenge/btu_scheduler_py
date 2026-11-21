@@ -15,7 +15,7 @@ This `version-16` branch pairs with BTU's `version-16` branch (Frappe v16). For 
 | Frappe Framework | version-16 | Provides the BTU app and REST API. Webserver mode requires BTU `version-16`. |
 
 > **Redis 6.2 minimum — not 6.0.**
-> Frappe v15's official requirement is "Redis 6", but BTU Scheduler uses the
+> Frappe documents its requirement as "Redis 6", but BTU Scheduler uses the
 > `ZRANGE ... BYSCORE` Redis command, which was added in Redis **6.2.0** (released
 > February 2021). Redis 6.0.x and 6.1.x do not support this command and will
 > return an error at runtime. Verify your Redis version with `redis-cli INFO server | grep redis_version`.

@@ -108,7 +108,7 @@ class SchedulerSettings(XdgSettings):
 
 
 def bootstrap_scheduler(*, handle_signals: bool = False) -> tuple[SchedulerSettings, structlog.stdlib.BoundLogger]:
-	global _settings  # noqa: PLW0603
+	global _settings
 	settings, log = bootstrap_app(SchedulerSettings, app_name=APP_NAME, handle_signals=handle_signals)
 	_settings = settings
 	return settings, log
@@ -119,10 +119,3 @@ def load_config() -> SchedulerSettings:
 		settings, _log = bootstrap_scheduler(handle_signals=False)
 		return settings
 	return _settings
-
-
-def reload_config() -> SchedulerSettings:
-	global _settings  # noqa: PLW0603
-	_settings = None
-	settings, _log = bootstrap_scheduler(handle_signals=False)
-	return settings

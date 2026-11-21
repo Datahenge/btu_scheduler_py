@@ -6,8 +6,8 @@ import threading
 import structlog
 
 from btu_scheduler.lib.config import bootstrap_scheduler
+from btu_scheduler.lib.diagnostics import diagnose_frappe_ping, diagnose_redis, diagnose_sql
 from btu_scheduler.lib.scheduler import queue_full_refill
-from btu_scheduler.lib.diagnostics import diagnose_redis, diagnose_sql, diagnose_frappe_ping
 
 log = structlog.get_logger(__name__)
 
@@ -27,8 +27,8 @@ async def main():
 		internal_queue_consumer,
 		internal_queue_producer,
 		redis_command_listener,
-		webserver_command_poller,
 		review_next_execution_times,
+		webserver_command_poller,
 	)
 
 	settings, _bootstrap_log = bootstrap_scheduler(handle_signals=True)

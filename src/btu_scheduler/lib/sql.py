@@ -87,31 +87,6 @@ async def get_task_schedule_by_id(task_schedule_id: str) -> dict:
 	return sql_row
 
 
-async def get_task_by_id(task_id: str) -> dict:
-	"""
-	Returns a single BTU Task row from the Frappe SQL database.
-	"""
-
-	query_string = f"""
-		SELECT
-			name 				AS task_key, 
-			desc_short,
-			desc_long,
-			arguments,
-			function_string 	AS path_to_function,
-			max_task_duration 
-		FROM
-			{quote("tabBTU Task")} 
-		WHERE
-			name = :task_id
-		LIMIT 1;
-	"""
-
-	database = await get_database()
-	sql_row = await database.fetch_one(query_string, values={"task_id": task_id})
-	return sql_row
-
-
 async def get_enabled_task_schedules() -> list:
 	"""
 	Returns a list of all enable BTU Task Schedule records from Frappe SQL database.
