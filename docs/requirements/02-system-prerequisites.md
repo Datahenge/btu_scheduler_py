@@ -36,4 +36,4 @@ See [01-environment-variables.md](01-environment-variables.md) for the full vari
 
 ## Frappe Framework
 
-Version 15 (`version-15` branch). The scheduler enqueues jobs by calling Frappe's REST API endpoint `btu.btu_api.endpoints.enqueue_for_next_available_worker`. The BTU app must be installed in the Frappe site and the web server must be reachable from the host running BTU Scheduler.
+Version 16 (`version-16` branch of both BTU and this scheduler; for Frappe v15, use the `version-15` branches). The scheduler enqueues jobs by calling Frappe's REST API endpoint `btu.btu_api.endpoints.enqueue_for_next_available_worker`. The BTU app must be installed in the Frappe site and the web server must be reachable from the host running BTU Scheduler.

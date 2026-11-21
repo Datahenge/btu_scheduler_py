@@ -1,5 +1,9 @@
 # BTU Scheduler
-This is the Python-based alternative to the original 2021 scheduler: https://github.com/Datahenge/btu_scheduler_daemon
+The scheduler service for [Background Tasks Unleashed (BTU)](https://github.com/Datahenge/btu). It runs continuously beside a Frappe site and enqueues BTU Tasks when their schedules come due.
+
+Documentation: https://btu.datahenge.com/
+
+This `version-16` branch pairs with BTU's `version-16` branch (Frappe v16). For Frappe v15, use the `version-15` branch of both.
 
 ### Prerequisites
 
@@ -8,7 +12,7 @@ This is the Python-based alternative to the original 2021 scheduler: https://git
 | Python | 3.11 | |
 | Redis server | **6.2** | See note below |
 | MariaDB or PostgreSQL | Frappe-supported version | Frappe's own database |
-| Frappe Framework | version-15 | Provides the BTU app and REST API |
+| Frappe Framework | version-16 | Provides the BTU app and REST API. Webserver mode requires BTU `version-16`. |
 
 > **Redis 6.2 minimum — not 6.0.**
 > Frappe v15's official requirement is "Redis 6", but BTU Scheduler uses the
